@@ -1,514 +1,98 @@
 :root{
-  --bg:#f5f7fa;
-  --accent:#0b84ff;
-  --taskbar: rgba(255,255,255,0.95);
-  --window-bg: rgba(255,255,255,0.95);
-  --window-fill:#ffffff;
-  --text:#0b1a2b;
-  --muted:#475569;
-  --border: rgba(15,23,42,0.06);
-  --shadow: rgba(15,23,42,0.06);
-  --context-hover: rgba(11,24,40,0.06);
-  --elev: 12;
-  --win-edge: rgb(200,200,200);
-  --selection-border: rgba(11,132,255,0.95);
-  --selection-fill: rgba(11,132,255,0.12);
+ --bg:#f5f7fa; --accent:#0b84ff; --taskbar: rgba(255,255,255,0.95); --window-bg: rgba(255,255,255,0.95); --window-fill:#ffffff; --text:#0b1a2b; --muted:#475569; --border: rgba(15,23,42,0.06); --shadow: rgba(15,23,42,0.06); --context-hover: rgba(11,24,40,0.06); --elev: 12; --win-edge: rgb(200,200,200); --selection-border: rgba(11,132,255,0.95); --selection-fill: rgba(11,132,255,0.12);
 }
 html,body{height:100%;margin:0;font-family:Segoe UI, system-ui, "Helvetica Neue", Arial;color:var(--text);background:var(--bg);overflow:hidden;}
 .wallpaper{position:absolute;inset:0;z-index:0;background-image:url('./win11.jpg');background-size:cover;background-position:center center;filter:saturate(1.02) contrast(1.01);}
-
 #desktop{position:relative;width:100%;height:100%;z-index:1;user-select:none;padding:20px;overflow:hidden;}
 #iconsContainer{position:absolute;left:20px;top:20px;width:240px;}
-
 /* 桌面图标 */
-.desk-icon{
-  width:84px;
-  text-align:center;
-  cursor:default;
-  position:relative;
-  margin-bottom:10px;
-  outline:none;
-  /* 保持布局与尺寸稳定：不在 .selected 时改变 padding/margin/transform/width/height */
-  padding: 0;
-  transition: none;
-}
+.desk-icon{ width:84px; text-align:center; cursor:default; position:relative; margin-bottom:10px; outline:none; padding: 0; transition: none; }
 /* 桌面图标拖拽时的样式 */
-.desk-icon.dragging {
-  opacity: 0.8 !important;           /* 拖动时稍微透明 */
-  cursor: move !important;      /* 拖动过程中显示十字光标 */
-  transition: none !important;       /* 禁止动画过渡，避免拖动卡顿 */
-}
-
-/* 任务栏条目拖拽时的样式 */
-.task-icon.dragging {
-  opacity: 0.8 !important;
-  cursor: move !important;
-  transition: none !important;
-}
-
-.ico{
-  width:64px;height:64px;margin:0 auto;border-radius:12px;background:transparent;display:flex;
-  align-items:center;justify-content:center;font-weight:700;color:var(--accent);box-shadow:none;border:0;overflow:visible;
-}
-.ico img{
-  width:auto;height:48px;display:block;object-fit:contain;
-  filter: drop-shadow(0 6px 10px rgba(11,24,40,0.08));
-  -webkit-filter: drop-shadow(0 6px 10px rgba(11,24,40,0.08));
-  image-rendering: optimizeQuality;
-  pointer-events:none;
-  transform-origin:center center;
-  max-width:64px; max-height:64px;
-  transition: none; /* 不在选中时改变图标 transform */
-}
-.label{
-  font-size:12px;margin-top:2px;color:#ffffff;text-shadow:0 1px 2px rgba(0,0,0,0.65);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  transition: none; /* 不因选中而改变文字样式尺寸 */
-}
-
-/* 选中样式：仅绘制外部选中范围框，不改变图标或文字的尺寸/位置/阴影/缩放 */
-.desk-icon.selected{
-  /* 不修改 padding/margin/transform/width/height 等布局属性 */
-  background: transparent;
-  box-shadow: none;
-  /* 保持原有内容不变，文本色与图标颜色也保持 */
-  color: inherit;
-}
-
-/* 选中范围框：使用伪元素绘制在 .desk-icon 外围，但不改变布局。
-   盒子略比图标内容大一些以包裹 ico 与 label。 */
-.desk-icon.selected::before{
-  content: "";
-  position: absolute;
-  left: -6px;
-  right: -6px;
-  top: -6px;
-  bottom: -6px;
-  border-radius:10px;
-  pointer-events: none;
-  border: 2px solid var(--selection-border);
-  background: var(--selection-fill);
-  box-shadow: 0 6px 18px rgba(11,132,255,0.12);
-  /* 保证伪元素不会造成布局闪烁或影响定位 */
-}
-
-/* 确保内部 ico 与 label 保持原样：不放大、不变色 */
-.desk-icon.selected .ico{
-  background: transparent;
-  box-shadow: none;
-}
-.desk-icon.selected .ico img{
-  transform: none;
-  filter: drop-shadow(0 6px 10px rgba(11,24,40,0.08));
-}
-.desk-icon.selected .label{
-  color: #ffffff; /* 视觉上 label 可为白色或保持原色，根据你的偏好，这里使用白色以在蓝色框上清晰可见 */
-  text-shadow: none;
-  font-weight:400;
-  margin-top:2px; /* 恢复默认间距，保证无布局变动 */
-}
-
-/* 当图标获得键盘焦点时显示轻微焦点环（便于可访问性） */
-.desk-icon:focus{
-  box-shadow: 0 0 0 3px rgba(11,132,255,0.14);
-  border-radius:10px;
-}
-
-/* 任务栏：贴紧底部、铺满宽度、较低高度 */
-#taskbar{
-  position:fixed;
-  left:0;
-  right:0;
-  bottom:0;
-  height:32px;
-  min-width:0;
-  max-width:100%;
-  border-radius:6px 6px 0 0;
-  padding:4px 12px;
-  background:var(--taskbar);
-  display:flex;
-  align-items:center;
-  gap:8px;
-  z-index:60;
-  backdrop-filter: blur(8px);
-  box-shadow:0 -6px 18px rgba(11,24,40,0.04);
-  border-top:1px solid var(--border);
-  box-sizing:border-box;
-  overflow:visible; /* allow the center scroller to show overflow if necessary */
-}
-
-/* 新增：任务栏分隔符（竖线），放在 quick-btn 之后 */
-.taskbar-sep{
-  width:2px;
-  height:20px;
-  background: rgba(90 90 90 / 38%);
-  border-radius:2px;
-  margin-left:8px;
-  margin-right:8px;
-  flex: 0 0 auto;
-  /* 增强可见性：轻微内阴影与外部高光，使其在浅色背景上更明显 */
-  box-shadow: 0 1px 0 rgba(255,255,255,0.06), inset 0 0 0 1px rgba(255,255,255,0.02);
-}
-
-/* 左侧按钮样式（保持不变） */
+.desk-icon.dragging { opacity: 0.8 !important; cursor: move !important; transition: none !important; }
+/* 任务栏项拖拽样式 */
+.task-icon.dragging { opacity: 0.8 !important; cursor: move !important; transition: none !important; }
+.ico{ width:64px;height:64px;margin:0 auto;border-radius:12px;background:transparent;display:flex; align-items:center;justify-content:center;font-weight:700;color:var(--accent);box-shadow:none;border:0;overflow:visible; }
+.ico img{ width:auto;height:48px;margin:0;display:block;object-fit:contain; filter: drop-shadow(0 6px 10px rgba(11,24,40,0.08)); -webkit-filter: drop-shadow(0 6px 10px rgba(11,24,40,0.08)); image-rendering: optimizeQuality; pointer-events:none; transform-origin:center center; max-width:64px; max-height:64px; transition: none; }
+.label{ font-size:12px;margin-top:2px;color:#ffffff;text-shadow:0 1px 2px rgba(0,0,0,0.65); white-space:nowrap;overflow:hidden;text-overflow:ellipsis; transition: none; }
+/* 选中样式：仅绘制外部选中范围框，不改变图标或文字尺寸/位置/阴影/缩放 */
+.desk-icon.selected{ background: transparent; box-shadow: none; color: inherit; }
+.desk-icon.selected::before{ content: ""; position: absolute; left: -6px; right: -6px; top: -6px; bottom: -6px; border-radius:10px; pointer-events: none; border: 2px solid var(--selection-border); background: var(--selection-fill); box-shadow: 0 6px 18px rgba(11,132,255,0.12); }
+.desk-icon.selected .ico{ background: transparent; box-shadow: none; }
+.desk-icon.selected .ico img{ transform: none; filter: drop-shadow(0 6px 10px rgba(11,24,40,0.08)); }
+.desk-icon.selected .label{ color: #ffffff; text-shadow: none; font-weight:400; margin-top:2px; }
+.desk-icon:focus{ box-shadow: 0 0 0 3px rgba(11,132,255,0.14); border-radius:10px; }
+/* 任务栏 */
+#taskbar{ position:fixed; left:0; right:0; bottom:0; height:32px; min-width:0; max-width:100%; border-radius:6px 6px 0 0; padding:4px 12px; background:var(--taskbar); display:flex; align-items:center; gap:8px; z-index:60; backdrop-filter: blur(8px); box-shadow:0 -6px 18px rgba(11,24,40,0.04); border-top:1px solid var(--border); box-sizing:border-box; overflow:visible; }
+.taskbar-sep{ width:2px; height:20px; background: rgba(90 90 90 / 38%); border-radius:2px; margin-left:8px; margin-right:8px; flex: 0 0 auto; box-shadow: 0 1px 0 rgba(255,255,255,0.06), inset 0 0 0 1px rgba(255,255,255,0.02); }
 .start-btn{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;border:0;background:transparent;}
 .start-btn img{width:18px;height:18px;display:block;object-fit:contain;}
-
 .quick-btn{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid transparent;background:transparent;color:var(--muted);padding:0;}
 .quick-btn img{width:18px;height:18px;display:block;object-fit:contain;}
 .quick-btn:hover{background:rgba(11,24,40,0.04);color:var(--text);}
-
-/* page buttons（在任务栏最右边显示分页控制） */
-.task-page-btn{
-  width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:0;background:transparent;color:var(--muted);padding:0;
-}
+.task-page-btn{ width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:0;background:transparent;color:var(--muted);padding:0; }
 .task-page-btn svg{width:16px;height:16px;display:block;}
 .task-page-btn.hidden{display:none;}
 .task-page-btn.disabled{opacity:0.36;pointer-events:none;}
 .task-page-btn:hover{background:rgba(11,24,40,0.04);color:var(--text);}
-
-/*
-  Make taskbar center horizontally scrollable when many items exist.
-  Use inline-flex items so they won't shrink below their intrinsic width,
-  and allow users to scroll to see hidden items.
-*/
-.taskbar-center{
-  flex:1;
-  display:flex;
-  gap:8px;
-  align-items:center;
-  justify-content:flex-start;
-  overflow-x:auto;
-  overflow-y:hidden;
-  padding-left:6px;
-  padding-right:6px;
-  white-space:nowrap;
-  -webkit-overflow-scrolling:touch;
-  /* Hide scrollbar visually across browsers while keeping scroll functional */
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none;    /* Firefox */
-}
+.taskbar-center{ flex:1; display:flex; gap:8px; align-items:center; justify-content:flex-start; overflow-x:auto; overflow-y:hidden; padding-left:6px; padding-right:6px; white-space:nowrap; -webkit-overflow-scrolling:touch; -ms-overflow-style: none; scrollbar-width: none; }
 .taskbar-center::-webkit-scrollbar{ display: none; height: 0; }
-
-/* 单个任务项：更明显的分隔、内边距、圆角
-   将宽度改为由 JS 自适应，CSS 仅提供最小可用样式 */
-.task-icon{
-  min-width:80px;
-  height:32px;
-  border-radius:8px;
-  display:inline-flex;
-  align-items:center;
-  gap:1px; /* 原来是 8px，现在缩短为 4px */
-  cursor:pointer;
-  padding:4px 10px;
-  border:1px solid transparent;
-  user-select:none;
-  position:relative;
-  transition: background-color 120ms ease; /* 去掉 transform 动画，只保留背景色变化 */
-  background: transparent;
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-
-/* 默认分隔线 只在非最后项显示 */
-.task-icon:not(:last-child)::after{
-  content: "";
-  position: absolute;
-  right: -4px;
-  top: 6px;
-  bottom: 6px;
-  width:1px;
-  background: rgba(11,23,40,0.04);
-  border-radius:1px;
-  pointer-events:none;
-}
-
-
-.task-icon:hover{
-  background: rgba(11,24,40,0.08); /* 鼠标掠过时用浅色背景表示 */
-  box-shadow: none; /* 去掉阴影 */
-  transform: none;  /* 去掉上移动画 */
-}
-
-
-.task-icon.active{
-  background: linear-gradient(180deg, rgb(11 132 255 / 36%), rgb(11 132 255 / 19%));
-  color: var(--text);
-  border:1px solid rgba(11,132,255,0.18);
-  box-shadow: 0 10px 30px rgba(11,132,255,0.06);
-}
-
-
-/* 替换 .t-ico：以图片为主，取消固定颜色块背景 */
-.t-ico{
-  width:36px;
-  height:36px;
-  border-radius:6px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  overflow:hidden;
-  flex: 0 0 26px;
-  font-weight:700;
-  color: white;
-  border:1px solid rgba(255,255,255,0.06);
-  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06);
-  background: transparent; /* 不使用 JS 生成的颜色块 */
-}
-
-/* 图标图片：保持纵横比并居中 */
-.t-ico img{
-  width:20px;
-  height:20px;
-  object-fit:contain;
-  display:block;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.12));
-}
-
-/* 极端回退（一般不会用到） */
-.t-ico .fallback-letter{
-  font-size:14px;
-  line-height:1;
-  user-select:none;
-}
-
-
-.t-title{
-  font-size:13px;
-  color:var(--muted);
-  white-space:nowrap;
-  max-width:220px;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-/* placeholder for dragging task order */
-.task-placeholder{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  width:64px;
-  height:32px;
-  border-radius:8px;
-  background: rgba(11,24,40,0.04);
-  border:1px dashed rgba(11,23,40,0.06);
-  box-sizing: border-box;
-  margin:0;
-  flex: 0 0 auto;
-}
-
-/* preview-card kept but not used for hover previews now */
+.task-icon{ min-width:80px; height:32px; border-radius:8px; display:inline-flex; align-items:center; gap:1px; cursor:pointer; padding:4px 10px; border:1px solid transparent; user-select:none; position:relative; transition: background-color 120ms ease; background: transparent; flex: 0 0 auto; box-sizing: border-box; overflow: hidden; }
+.task-icon:not(:last-child)::after{ content: ""; position: absolute; right: -4px; top: 6px; bottom: 6px; width:1px; background: rgba(11,23,40,0.04); border-radius:1px; pointer-events:none; }
+.task-icon:hover{ background: rgba(11,24,40,0.08); box-shadow: none; transform: none; }
+.task-icon.active{ background: linear-gradient(180deg, rgb(11 132 255 / 36%), rgb(11 132 255 / 19%)); color: var(--text); border:1px solid rgba(11,132,255,0.18); box-shadow: 0 10px 30px rgba(11,132,255,0.06); }
+.t-ico{ width:36px; height:36px; border-radius:6px; display:flex; align-items:center; justify-content:center; overflow:hidden; flex: 0 0 26px; font-weight:700; color: white; border:1px solid rgba(255,255,255,0.06); box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06); background: transparent; }
+.t-ico img{ width:20px; height:20px; object-fit:contain; display:block; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.12)); }
+.t-ico .fallback-letter{ font-size:14px; line-height:1; user-select:none; }
+.t-title{ font-size:13px; color:var(--muted); white-space:nowrap; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
+.task-placeholder{ display:inline-flex; align-items:center; justify-content:center; width:64px; height:32px; border-radius:8px; background: rgba(11,24,40,0.04); border:1px dashed rgba(11,23,40,0.06); box-sizing: border-box; margin:0; flex: 0 0 auto; }
 .preview-card{position:fixed;z-index:120;display:none;border-radius:8px;overflow:hidden;border:1px solid var(--border);box-shadow:0 12px 40px rgba(11,24,40,0.08);background:#fff;}
 .preview-card .inner{width:280px;height:180px;overflow:auto;padding:8px;color:var(--muted);box-sizing:border-box;}
-
-/* 去掉弹出窗口四周阴影（按要求仅移除窗口阴影），保留边框和其他样式 */
-.win{
-  position:absolute;min-width:260px;min-height:140px;width:720px;height:460px;border-radius:0;background:var(--window-bg);
-  border:1px solid var(--win-edge);
-  box-shadow: none;
-  overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .12s;
-}
-/* 修改：将标题栏高度由 40px 调整为 32px，使其与右侧按钮高度更接近（更贴近 Win11 外观） */
-.titlebar{
-  height:32px;
-  display:flex;
-  align-items:center;
-  padding:0 12px;
-  gap:8px; /* 图标和标题之间的间距 */
-  cursor:grab;
-  background: linear-gradient(180deg, #f3f4f6, #eef0f3);
-  color: #0b1a2b;
-  box-shadow: inset 0 -4px 10px rgba(0,0,0,0.03);
-  border-bottom:1px solid rgba(11,23,40,0.04);
-}
-
-.title-icon{
-  width:18px;
-  height:18px;
-  flex:0 0 auto;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-.title-icon img{
-  width:16px;
-  height:16px;
-  object-fit:contain;
-  display:block;
-}
-
+.win{ position:absolute;min-width:260px;min-height:140px;width:720px;height:460px;border-radius:0;background:var(--window-bg); border:1px solid var(--win-edge); box-shadow: none; overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .12s; }
+/* 修改：将标题栏高度调整为32px，保留图标与标题间距 */
+.titlebar{ height:32px; display:flex; align-items:center; padding:0 12px; gap:8px; cursor:grab; background: linear-gradient(180deg, #f3f4f6, #eef0f3); color: #0b1a2b; box-shadow: inset 0 -4px 10px rgba(0,0,0,0.03); border-bottom:1px solid rgba(11,23,40,0.04); }
+.title-icon{ width:18px; height:18px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; }
+.title-icon img{ width:16px; height:16px; object-fit:contain; display:block; }
 /* 标题垂直居中并防止文本重叠 */
 .title{flex:1;font-weight:600;color:#0b1a2b;font-size:13px;line-height:32px;}
-/* 右侧按钮的高度做小幅调整以更好地对齐新的标题栏高度 */
 .actions{display:flex;gap:6px;align-items:center;}
 .actions .btn{width:36px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);border:0;background:transparent;padding:0;}
 .actions .btn:hover{background:rgba(11,24,40,0.04);color:var(--text);}
 .actions .btn svg{width:14px;height:14px;display:block;}
 .actions .btn-close:hover{background:#e81123;color:#fff;}
 .actions .btn-close:active{background:#c50f1f;color:#fff;}
-
 .content{flex:1;padding:12px 14px;background:linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,251,253,0.98));color:var(--muted);overflow:auto;}
-
 .win.hidden{opacity:0;pointer-events:none;display:block}
 .win.maxed-over{position:fixed;left:0;top:0;width:100vw;height:100vh;border-radius:0;margin:0;padding-top:0;z-index:9999;border-radius:0;border:1px solid var(--win-edge);}
-
 /* Ghost used for drag preview, keep shadow removed per project rules */
 .ghost{position:fixed;z-index:2000;pointer-events:none;border-radius:0;overflow:hidden;border:1px solid var(--win-edge);box-shadow: none;background:var(--window-bg);transform-origin:center center;transition:transform 360ms cubic-bezier(.2,.8,.2,1), opacity 300ms;}
-
-/* Win7 风格开始菜单（层叠菜单） - 调整大小与颜色 */
-.start-classic{
-  position:fixed;
-  z-index:500;
-  display:none;
-  min-width:260px;
-  max-width:420px;
-  border-radius:8px;
-  background:rgba(255,255,255,0.98);
-  border:1px solid var(--border);
-  box-shadow:0 30px 80px rgba(11,24,40,0.15);
-  overflow:visible;
-}
-.start-classic .menu{
-  position:relative;
-  padding:10px;
-}
-.start-classic .menu-list{
-  list-style:none;
-  margin:0;
-  padding:6px;
-}
-.start-classic .menu-item{
-  position:relative;
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:10px 14px;
-  border-radius:8px;
-  color:var(--text); /* 深色文字 默认 */
-  cursor:pointer;
-  user-select:none;
-  white-space:nowrap;
-  line-height:1.25;
-  text-shadow:none; /* 去掉文字阴影 */
-}
-.start-classic .menu-item:hover,
-.start-classic .menu-item:focus{
-  background:var(--context-hover);
-  color:var(--text);
-  outline:none;
-  text-shadow:none;
-}
-.start-classic .menu-item[aria-disabled="true"]{
-  opacity:0.5; cursor:default;
-}
-
-/* 再次放大图标和文字，并确保文字无阴影 */
-.start-classic .icon{
-  width:34px; height:34px; flex:0 0 34px; border-radius:8px; overflow:hidden;
-  display:flex; align-items:center; justify-content:center;
-  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06);
-}
-.start-classic .icon img{
-  width:24px; height:24px; object-fit:contain; display:block;
-}
-.start-classic .label{
-  font-size:17px; /* 更大文字 */
-  line-height:1.15;
-  color: var(--text); /* 深色文字 */
-  max-width:340px; overflow:hidden; text-overflow:ellipsis;
-  text-shadow:none; /* 去掉文字阴影 */
-}
-
-.start-classic .arrow{
-  margin-left:auto;
-  width:12px; height:12px; /* 箭头略大 */
-  border:solid currentColor;
-  border-width:0 1.6px 1.6px 0;
-  transform:rotate(-45deg);
-}
-.start-classic .submenu{
-  position:absolute;
-  top:0;
-  left:100%;
-  margin-left:8px;
-  min-width:240px;
-  max-width:420px;
-  border-radius:8px;
-  background:rgba(255,255,255,0.98);
-  border:1px solid var(--border);
-  box-shadow:0 24px 60px rgba(11,24,40,0.12);
-  padding:8px;
-  display:none;
-}
-.start-classic .menu-item.open > .submenu{
-  display:block;
-}
-.start-classic .submenu.flip-left{
-  left:auto; right:100%; margin-left:0; margin-right:8px;
-}
-
+.start-classic{ position:fixed; z-index:500; display:none; min-width:260px; max-width:420px; border-radius:8px; background:rgba(255,255,255,0.98); border:1px solid var(--border); box-shadow:0 30px 80px rgba(11,24,40,0.15); overflow:visible; }
+.start-classic .menu{ position:relative; padding:10px; }
+.start-classic .menu-list{ list-style:none; margin:0; padding:6px; }
+.start-classic .menu-item{ position:relative; display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:8px; color:var(--text); cursor:pointer; user-select:none; white-space:nowrap; line-height:1.25; text-shadow:none; }
+.start-classic .menu-item:hover, .start-classic .menu-item:focus{ background:var(--context-hover); color:var(--text); outline:none; text-shadow:none; }
+.start-classic .menu-item[aria-disabled="true"]{ opacity:0.5; cursor:default; }
+.start-classic .icon{ width:34px; height:34px; flex:0 0 34px; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06); }
+.start-classic .icon img{ width:24px; height:24px; object-fit:contain; display:block; }
+.start-classic .label{ font-size:17px; line-height:1.15; color: var(--text); max-width:340px; overflow:hidden; text-overflow:ellipsis; text-shadow:none; }
+.start-classic .arrow{ margin-left:auto; width:12px; height:12px; border:solid currentColor; border-width:0 1.6px 1.6px 0; transform:rotate(-45deg); }
+.start-classic .submenu{ position:absolute; top:0; left:100%; margin-left:8px; min-width:240px; max-width:420px; border-radius:8px; background:rgba(255,255,255,0.98); border:1px solid var(--border); box-shadow:0 24px 60px rgba(11,24,40,0.12); padding:8px; display:none; }
+.start-classic .menu-item.open > .submenu{ display:block; }
+.start-classic .submenu.flip-left{ left:auto; right:100%; margin-left:0; margin-right:8px; }
 .context-menu{position:fixed;z-index:100000;background:#ffffff;padding:8px;border-radius:8px;border:1px solid var(--border);display:none;min-width:180px;box-shadow:0 12px 36px rgba(11,24,40,0.12);}
 .context-menu .item{padding:8px 10px;color:var(--muted);cursor:pointer;border-radius:6px;white-space:nowrap;}
 .context-menu .item:hover{background:var(--context-hover);color:var(--text);}
-.context-menu .sep{
-  height:1px;
-  margin:6px 4px;
-  background: rgba(11,23,40,0.12);
-  border-radius:1px;
-  pointer-events:none;
-}
-
-
-
+.context-menu .sep{ height:1px; margin:6px 4px; background: rgba(11,23,40,0.12); border-radius:1px; pointer-events:none; }
 .quick-menu{position:fixed;z-index:100001;background:#ffffff;padding:8px;border-radius:8px;border:1px solid var(--border);display:none;min-width:200px;box-shadow:0 12px 36px rgba(11,24,40,0.12);}
-
 .quick-menu .item{padding:8px 10px;color:var(--muted);cursor:pointer;border-radius:6px;white-space:nowrap;}
 .quick_menu .item:hover{background:var(--context-hover);color:var(--text);}
-
 .titlebar-menu{position:fixed;z-index:100002;background:#ffffff;padding:8px;border-radius:8px;border:1px solid var(--border);display:none;min-width:160px;box-shadow:0 12px 36px rgba(11,24,40,0.12);}
-
 .titlebar-menu .item{padding:8px 10px;color:var(--muted);cursor:pointer;border-radius:6px;white-space:nowrap;}
 .titlebar-menu .item:hover{background:var(--context-hover);color:var(--text);}
-
 .webpanel-top{display:flex;gap:8px;margin-bottom:8px;}
 .webpanel-top input{flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);font-size:14px;}
 .webpanel-top button{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:linear-gradient(180deg,#fff,#f6f9ff);cursor:pointer;}
-
-/* Tooltip for taskbar items: prominent, larger font, appears above the item */
-.task-tooltip{
-  position:fixed;
-  z-index:99999;
-  display:none;
-  pointer-events:none;
-  transform-origin:center bottom;
-  background:linear-gradient(180deg,#ffffff,#f3f7ff);
-  border:1px solid rgba(11,23,40,0.06);
-  box-shadow:0 10px 30px rgba(11,24,40,0.12);
-  padding:8px 12px;
-  border-radius:8px;
-  color:var(--text);
-  white-space:nowrap;
-}
-.task-tooltip .title{
-  font-size:15px; /* 更大字体以便显眼 */
-  font-weight:700;
-  color:var(--text);
-  line-height:1;
-  letter-spacing:0.2px;
-}
-.task-tooltip.show{
-  display:block;
-  animation: tooltipFade 160ms cubic-bezier(.2,.8,.2,1);
-  transform: translateY(0) scale(1);
-  opacity:1;
-}
-@keyframes tooltipFade{
-  from{ transform: translateY(6px) scale(0.98); opacity:0; }
-  to{ transform: translateY(0) scale(1); opacity:1; }
-}
-
-@media (max-width:760px){
-  #taskbar{padding:4px 8px;border-radius:0;height:32px;}
-}
+.task-tooltip{ position:fixed; z-index:99999; display:none; pointer-events:none; transform-origin:center bottom; background:linear-gradient(180deg,#ffffff,#f3f7ff); border:1px solid rgba(11,23,40,0.06); box-shadow:0 10px 30px rgba(11,24,40,0.12); padding:8px 12px; border-radius:8px; color:var(--text); white-space:nowrap; }
+.task-tooltip .title{ font-size:15px; font-weight:700; color:var(--text); line-height:1; letter-spacing:0.2px; }
+.task-tooltip.show{ display:block; animation: tooltipFade 160ms cubic-bezier(.2,.8,.2,1); transform: translateY(0) scale(1); opacity:1; }
+@keyframes tooltipFade{ from{ transform: translateY(6px) scale(0.98); opacity:0; } to{ transform: translateY(0) scale(1); opacity:1; } }
+@media (max-width:760px){ #taskbar{padding:4px 8px;border-radius:0;height:32px;} }
