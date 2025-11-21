@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Desktop — Custom chrome-like controls (final icons)</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="wallpaper"></div>
+  <div id="desktop" tabindex="0">
+    <div id="iconsContainer"></div>
+    <div id="windows"></div>
+
+    <div id="taskbar">
+      <div class="start-btn" id="startBtn" title="开始">
+        <img src="./icons/start.png" alt="start" />
+      </div>
+      <div class="quick-btn" id="quickBtn" title="窗口模块">
+        <img src="./icons/window.png" alt="windows" />
+      </div>
+
+      <!-- 新增：任务栏左区与中区之间的竖向分隔条 -->
+      <div class="taskbar-sep" aria-hidden="true"></div>
+
+      <div class="taskbar-center" id="taskCenter"></div>
+
+      <button class="task-page-btn hidden" id="taskPageLeft" title="上一页" aria-hidden="true" aria-label="上一页">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M16 19l-7-7 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <button class="task-page-btn hidden" id="taskPageRight" title="下一页" aria-hidden="true" aria-label="下一页">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 5l7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <div class="preview-card" id="previewCard"><div class="inner"></div></div>
+
+    <div class="task-tooltip" id="taskTooltip" role="tooltip" aria-hidden="true">
+      <div class="title" id="taskTooltipTitle"></div>
+    </div>
+
+    <div class="context-menu" id="desktopMenu" role="menu" tabindex="0" aria-hidden="true">
+      <div class="item" data-action="tile-left">左侧平铺</div>
+      <div class="item" data-action="tile-right">右侧平铺</div>
+      <div class="item" data-action="tile-grid">网格平铺</div>
+      <div class="item" data-action="rearrange-icons">重新排列图标</div>
+      <!-- 新增：在刷新上方插入分割线与全屏相关条目 -->
+      <div class="sep" aria-hidden="true"></div>
+      <div class="item" data-action="fullscreen">全屏幕显示</div>
+      <div class="item" data-action="exit-fullscreen">取消全屏</div>
+      <div class="sep" aria-hidden="true"></div>
+      <div class="item" data-action="refresh">刷新</div>
+    </div>
+
+
+    <div class="titlebar-menu" id="titlebarMenu" role="menu" tabindex="0" aria-hidden="true">
+      <div class="item" data-action="minimize">最小化</div>
+      <div class="item" data-action="maximize-restore">最大化 / 还原</div>
+      <div class="item" data-action="close">关闭</div>
+    </div>
+
+    <div class="quick-menu" id="quickMenu" role="menu" aria-hidden="true">
+      <div class="item" data-action="minimize-all">最小化所有窗口</div>
+      <div class="item" data-action="restore-all">恢复所有窗口</div>
+      <div class="item" data-action="close-all">关闭所有窗口</div>
+    </div>
+
+    <div class="start-classic" id="startClassic" role="menu" aria-hidden="true">
+      <div class="menu">
+        <ul class="menu-list" id="startClassicRoot">
+          <!-- 由脚本动态填充 -->
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 依赖脚本 -->
+  <script src="./jquery-3.7.1.min.js"></script>
+  <script src="./interact.min.js"></script>
+  <!-- 主脚本 -->
+  <script src="./app.js"></script>
+</body>
+</html>
