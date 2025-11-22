@@ -272,6 +272,147 @@
         requestAnimationFrame(() => { $ghost.css({ transform: `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`, opacity: 0.95 }); });
         setTimeout(() => { $ghost.remove(); meta.minimized = true; meta.$el.hide().removeClass('hidden'); persistWindows(); }, 360);
     }
+    /**
+     * createIframeWindow
+     * 在桌面上新建一个窗口，内容为 iframe 并加载本站点页面（增强版）。
+     *
+     * 参数：
+     *  - pageUrl {string}  : 要打开的页面地址（建议使用本站相对路径或同源绝对路径）
+     *  - title   {string}  : 窗口标题（显示在标题栏）
+     *  - iconSrc {string}  : 标题栏与任务栏使用的图标地址（可选）
+     *
+     * 返回：
+     *  - { id, iframeEl, loaded }
+     *    - id: 新建窗口的 id（字符串）
+     *    - iframeEl: 创建的 iframe DOM 元素引用
+     *    - loaded: Promise，在 iframe load 事件触发后 resolve(iframeEl)
+     *
+     * 说明：
+     *  - 为了安全与一致性，函数会尽量确保 pageUrl 为本站点路径（以 '/' 开头或与 location.origin 同源）。
+     *  - iframe 使用 sandbox 属性以限制权限；在同源场景下允许脚本与表单（可按需调整）。
+     *  - 函数会在 iframe 加载完成时更新加载指示并 resolve 返回的 Promise。
+     */
+    function createIframeWindow(pageUrl, title, iconSrc) {
+        // 参数与同源校验
+        let finalUrl = 'about:blank';
+        try {
+            if (!pageUrl || typeof pageUrl !== 'string') {
+                console.warn('createIframeWindow: invalid pageUrl, falling back to about:blank');
+                finalUrl = 'about:blank';
+            } else {
+                // 允许相对路径或同源绝对路径
+                try {
+                    const parsed = new URL(pageUrl, window.location.href);
+                    if (parsed.origin !== window.location.origin) {
+                        // 非本站点地址，警告并回退到 about:blank（可按需放宽）
+                        console.warn('createIframeWindow: pageUrl is not same-origin, falling back to about:blank', pageUrl);
+                        finalUrl = 'about:blank';
+                    } else {
+                        finalUrl = parsed.href;
+                    }
+                } catch (e) {
+                    console.warn('createIframeWindow: URL parse failed, falling back to about:blank', e);
+                    finalUrl = 'about:blank';
+                }
+            }
+        } catch (err) {
+            console.warn('createIframeWindow: unexpected error during validation', err);
+            finalUrl = 'about:blank';
+        }
+
+        // 生成唯一 iframe id 以便后续引用
+        const iframeId = 'iframe_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+
+        // 构造加载指示（简单条与文字），并在 iframe 加载完成后隐藏
+        const loadingBarHtml = `
+    <div class="iframe-loading" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid rgba(11,23,40,0.04);background:linear-gradient(180deg,#fff,#fbfdff);">
+      <div style="width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px rgba(11,132,255,0.18);animation:iframePulse 1.2s infinite linear;"></div>
+      <div style="font-size:13px;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">正在加载：${(title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+      <div style="font-size:12px;color:var(--muted);opacity:0.8;">${finalUrl === 'about:blank' ? 'about:blank' : new URL(finalUrl).pathname}</div>
+    </div>
+    <style>
+      @keyframes iframePulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.86); opacity: 0.6; } 100% { transform: scale(1); opacity: 1; } }
+    </style>
+  `;
+
+        // iframe HTML（使用 sandbox，允许同源脚本与表单）
+        // sandbox 属性：在同源场景下 allow-same-origin 允许 iframe 与父窗口同源交互（谨慎使用）
+        const iframeHtml = `
+    <div style="height:100%;display:flex;flex-direction:column;">
+      ${loadingBarHtml}
+      <div style="flex:1;border:0;overflow:hidden;">
+        <iframe id="${iframeId}" src="${finalUrl}" style="width:100%;height:100%;border:0;" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
+      </div>
+    </div>
+  `;
+
+        // 使用现有 createWindow 创建窗口（保留原有行为）
+        const winId = createWindow({
+            app: 'iframe-window',
+            title: title || finalUrl,
+            content: iframeHtml,
+            img: iconSrc || undefined,
+            width: 900,
+            height: 600
+        });
+
+        // 获取 iframe 元素引用（可能需要等待 DOM 插入）
+        const meta = windowsMap[winId];
+        let iframeEl = null;
+        let loadedResolve;
+        const loadedPromise = new Promise((resolve) => { loadedResolve = resolve; });
+
+        // 尝试在下一帧获取 iframe 元素并绑定 load 事件
+        requestAnimationFrame(() => {
+            try {
+                if (meta && meta.$el && meta.$el.length) {
+                    iframeEl = meta.$el.find('#' + iframeId)[0];
+                    if (iframeEl) {
+                        // 绑定 load 事件：在加载完成后隐藏加载指示并 resolve
+                        const onLoadHandler = function () {
+                            try {
+                                // 隐藏或移除加载条（查找父容器的第一个子节点）
+                                const $loading = meta.$el.find('.iframe-loading');
+                                if ($loading && $loading.length) {
+                                    $loading.fadeOut(160, function () { $loading.remove(); });
+                                }
+                            } catch (e) { /* 忽略隐藏失败 */ }
+                            // resolve 返回 iframe 元素
+                            try { loadedResolve(iframeEl); } catch (e) { }
+                            // 移除事件监听（防止重复触发）
+                            try { iframeEl.removeEventListener('load', onLoadHandler); } catch (e) { }
+                        };
+                        // 如果 iframe 已经完成加载（缓存/同步），直接触发处理
+                        iframeEl.addEventListener('load', onLoadHandler);
+                        // 若 iframe 已经处于 complete 状态（某些浏览器场景），手动触发一次
+                        try {
+                            if (iframeEl.contentWindow && iframeEl.contentDocument && iframeEl.contentDocument.readyState === 'complete') {
+                                // 延迟执行以保证 onLoadHandler 已绑定
+                                setTimeout(() => { onLoadHandler(); }, 20);
+                            }
+                        } catch (e) {
+                            // 访问 contentDocument 可能因跨域被拒绝；在同源场景下上面会工作
+                        }
+                    } else {
+                        // 未找到 iframe 元素（极少见），直接 resolve null 并在控制台警告
+                        console.warn('createIframeWindow: iframe element not found after createWindow', iframeId, winId);
+                        loadedResolve(null);
+                    }
+                } else {
+                    console.warn('createIframeWindow: window meta not found for', winId);
+                    loadedResolve(null);
+                }
+            } catch (err) {
+                console.warn('createIframeWindow: unexpected error while binding iframe load', err);
+                loadedResolve(null);
+            }
+        });
+
+        // 返回包含 id、iframe 元素引用（可能为 null，需等待 loaded Promise）与 loaded Promise
+        return { id: winId, iframeEl: iframeEl, loaded: loadedPromise };
+    }
+    window.createIframeWindow = createIframeWindow;
+
     function restoreFromTask(id) {
         const meta = windowsMap[id];
         const $task = $taskCenter.find(`[data-win="${id}"]`);
