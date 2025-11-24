@@ -49,11 +49,14 @@ html,body{height:100%;margin:0;font-family:Segoe UI, system-ui, "Helvetica Neue"
 .preview-card .inner{width:280px;height:180px;overflow:auto;padding:8px;color:var(--muted);box-sizing:border-box;}
 .win{ position:absolute;min-width:260px;min-height:140px;width:720px;height:460px;border-radius:0;background:var(--window-bg); border:1px solid var(--win-edge); box-shadow: none; overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .12s; }
 /* 修改：将标题栏高度调整为32px，保留图标与标题间距 */
-.titlebar{ height:32px; display:flex; align-items:center; padding:0 12px; gap:8px; cursor:grab; background: linear-gradient(180deg, #f3f4f6, #eef0f3); color: #0b1a2b; box-shadow: inset 0 -4px 10px rgba(0,0,0,0.03); border-bottom:1px solid rgba(11,23,40,0.04); }
-.title-icon{ width:18px; height:18px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; }
-.title-icon img{ width:16px; height:16px; object-fit:contain; display:block; }
-/* 标题垂直居中并防止文本重叠 */
-.title{flex:1;font-weight:600;color:#0b1a2b;font-size:13px;line-height:32px;}
+/* 主要改动：放大标题栏左侧图标与标题文字，使其与右侧按钮视觉上匹配，并让图标更靠左、标题更靠近图标 */
+.titlebar{ height:32px; display:flex; align-items:center; padding:0 12px 0 4px; gap:2px; cursor:grab; background: linear-gradient(180deg, #f3f4f6, #eef0f3); color: #0b1a2b; box-shadow: inset 0 -4px 10px rgba(0,0,0,0.03); border-bottom:1px solid rgba(11,23,40,0.04); }
+/* 放大标题栏左侧图标，使其与右侧按钮高度/视觉权重相近，并更靠左 */
+.title-icon{ width:36px; height:26px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border-radius:6px; overflow:hidden; margin-right:2px; margin-left:0; }
+/* 图标内部图片尺寸略小于容器以保持内边距 */
+.title-icon img{ width:20px; height:20px; object-fit:contain; display:block; }
+/* 标题文字增大并调整行高以垂直居中（与按钮高度对齐），并更靠近图标 */
+.title{flex:1;font-weight:600;color:#0b1a2b;font-size:14px;line-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-left:0;padding-left:0;}
 .actions{display:flex;gap:6px;align-items:center;}
 .actions .btn{width:36px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);border:0;background:transparent;padding:0;}
 .actions .btn:hover{background:rgba(11,24,40,0.04);color:var(--text);}
