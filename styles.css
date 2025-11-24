@@ -26,9 +26,10 @@ html,body{height:100%;margin:0;font-family:Segoe UI, system-ui, "Helvetica Neue"
 .taskbar-sep{ width:2px; height:20px; background: rgba(90 90 90 / 38%); border-radius:2px; margin-left:8px; margin-right:8px; flex: 0 0 auto; box-shadow: 0 1px 0 rgba(255,255,255,0.06), inset 0 0 0 1px rgba(255,255,255,0.02); }
 .start-btn{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;border:0;background:transparent;}
 .start-btn img{width:18px;height:18px;display:block;object-fit:contain;}
+.start-btn:hover{background:rgba(11,24,40,0.08);color:var(--text);transition: background-color 120ms ease, color 120ms ease;}
 .quick-btn{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid transparent;background:transparent;color:var(--muted);padding:0;}
 .quick-btn img{width:18px;height:18px;display:block;object-fit:contain;}
-.quick-btn:hover{background:rgba(11,24,40,0.04);color:var(--text);}
+.quick-btn:hover{background:rgba(11,24,40,0.08);color:var(--text);}
 .task-page-btn{ width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:0;background:transparent;color:var(--muted);padding:0; }
 .task-page-btn svg{width:16px;height:16px;display:block;}
 .task-page-btn.hidden{display:none;}
@@ -75,7 +76,7 @@ html,body{height:100%;margin:0;font-family:Segoe UI, system-ui, "Helvetica Neue"
 .start-classic .menu-item:hover, .start-classic .menu-item:focus{ background:var(--context-hover); color:var(--text); outline:none; text-shadow:none; }
 .start-classic .menu-item[aria-disabled="true"]{ opacity:0.5; cursor:default; }
 .start-classic .icon{ width:34px; height:34px; flex:0 0 34px; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06); }
-.start-classic .icon img{ width:24px; height:24px; object-fit:contain; display:block; }
+.start-classic .icon img{ width:32px; height:32px; object-fit:contain; display:block; }
 .start-classic .label{ font-size:17px; line-height:1.15; color: var(--text); max-width:340px; overflow:hidden; text-overflow:ellipsis; text-shadow:none; }
 .start-classic .arrow{ margin-left:auto; width:12px; height:12px; border:solid currentColor; border-width:0 1.6px 1.6px 0; transform:rotate(-45deg); }
 .start-classic .submenu{ position:absolute; top:0; left:100%; margin-left:8px; min-width:240px; max-width:420px; border-radius:8px; background:rgba(255,255,255,0.98); border:1px solid var(--border); box-shadow:0 24px 60px rgba(11,24,40,0.12); padding:8px; display:none; }
