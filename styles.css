@@ -87,7 +87,12 @@ html,body{height:100%;margin:0;font-family:Segoe UI, system-ui, "Helvetica Neue"
 .context-menu .sep{ height:1px; margin:6px 4px; background: rgba(11,23,40,0.12); border-radius:1px; pointer-events:none; }
 .quick-menu{position:fixed;z-index:100001;background:#ffffff;padding:8px;border-radius:8px;border:1px solid var(--border);display:none;min-width:200px;box-shadow:0 12px 36px rgba(11,24,40,0.12);}
 .quick-menu .item{padding:8px 10px;color:var(--muted);cursor:pointer;border-radius:6px;white-space:nowrap;}
-.quick_menu .item:hover{background:var(--context-hover);color:var(--text);}
+.quick-menu .item:hover,
+.quick-menu .item.is-hover,
+.quick-menu .item:focus {
+  background: var(--context-hover);
+  color: var(--text);
+}
 .titlebar-menu{position:fixed;z-index:100002;background:#ffffff;padding:8px;border-radius:8px;border:1px solid var(--border);display:none;min-width:160px;box-shadow:0 12px 36px rgba(11,24,40,0.12);}
 .titlebar-menu .item{padding:8px 10px;color:var(--muted);cursor:pointer;border-radius:6px;white-space:nowrap;}
 .titlebar-menu .item:hover{background:var(--context-hover);color:var(--text);}
