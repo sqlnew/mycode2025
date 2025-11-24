@@ -559,6 +559,7 @@
             $taskTooltip.removeClass('show').attr('aria-hidden', 'true');
             setTimeout(() => { if (!$taskTooltip.hasClass('show')) $taskTooltip.hide(); }, 180);
         }
+        window.hideTaskTooltip = hideTaskTooltip;
         $ti.on('mouseenter', function () { const el = this; if (tooltipTimer) clearTimeout(tooltipTimer); tooltipTimer = setTimeout(() => { showTaskTooltipFor(el); tooltipTimer = null; }, 320); });
         $ti.on('mouseleave', function () { if (tooltipTimer) { clearTimeout(tooltipTimer); tooltipTimer = null; } setTimeout(() => { if (!$(document.activeElement).is('.task-icon') || $(document.activeElement).data('win') !== $(this).data('win')) { hideTaskTooltip(); } }, 120); });
         $ti.on('focus', function () { if (tooltipTimer) { clearTimeout(tooltipTimer); tooltipTimer = null; } showTaskTooltipFor(this); });
