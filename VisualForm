@@ -1,0 +1,333 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+
+
+
+namespace DLCA
+{
+
+
+    public partial class VisualForm
+    {
+
+    }
+
+    public partial class Form1 : VisualForm
+    {
+
+        public Form1 MainForm;
+        public string Global_LocalCommand_Enable = "1";
+        
+       
+
+        // 建议复用 HttpClient，而不是每次都 new
+        private static readonly HttpClient client = new HttpClient
+        {
+            Timeout = TimeSpan.FromMilliseconds(10000) // 10 秒
+        };
+
+
+        public Form1()
+        {
+            MainForm = this;
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            mibsql.NLog_InitLogger();
+        }
+
+
+        //执行本地命令提交信息类//
+        public class LocalCommandClass
+        {
+            public string random1 { get; set; } = "";
+            public string token { get; set; } = "";
+            public string cmd { get; set; } = "";
+            public dynamic data { get; set; }
+        }
+
+
+
+
+
+        public void Cmd_RunLocalCommand(string InQueryText, ref string OutJson)
+        {
+            string TemCmd = "";
+            OutJson = "";
+            LocalCommandClass TemQuery;
+            try
+            {
+                TemQuery = JsonConvert.DeserializeObject<LocalCommandClass>(InQueryText);
+            }
+            catch (Exception E)
+            {
+                TemQuery = null;
+            }
+            if (TemQuery == null)
+            {
+                MSG.WriteLine($@"解码失败");
+                OutJson = @"解码失败";
+                return;
+            }
+            //Token//
+            /* 
+            //执行本地命令不查看授权// 
+            if (TemQuery.token != Global_ClientToken)
+            {
+                OutJson = @"授权失败";
+                return;
+            }
+            */
+            if (Global_LocalCommand_Enable != "1")
+            {
+                OutJson = @"不允许执行命令";
+                return;
+            }
+            TemCmd = TemQuery.cmd;
+            //获取代理程序是否正常//
+            if (TemCmd == "localcmd_appinfo")
+            {
+                OutJson = CmdFun_GetAppInfo();
+            }
+            //终止本程序//
+            if (TemCmd == "localcmd_TerminatApp")
+            {
+                OutJson = @"App Terminating...";
+                MSG.WriteLine(@"App Terminating...");
+                Environment.Exit(1);
+            }
+            //设置终端//
+            if (TemCmd == "localcmd_setuiconsole")
+            {
+                string TemUIConsoleHandle = TemQuery.data;
+                try
+                {
+                    //mywinapi.DisbleQuickEditMode(Convert.ToInt64(TemUIConsoleHandle));
+                    OutJson = @"Set UIC OK!";
+                    MSG.WriteLine(OutJson);
+                }
+                catch (Exception e)
+                {
+                    MSG.WriteLine(e.Message);
+                }
+            }
+            //导入单个xml文件//
+            if (TemCmd == "localcmd_importxml_onefile")
+            {
+                try
+                {
+                    string xmlPath = TemQuery.data?.ToString() ?? "";
+                    if (string.IsNullOrWhiteSpace(xmlPath))
+                    {
+                        OutJson = "缺少 xml 文件路径";
+                        return;
+                    }
+
+                    // 使用全局调度器，保证在单线程中执行数据库操作
+                    Program.GlobalDbScheduler.Schedule(() =>
+                    {
+                        try
+                        {
+                            Program.GlobalData.ImportXmlFileToDwDb(xmlPath);
+                            MSG.WriteLine($"成功导入 XML 文件: {xmlPath}");
+                        }
+                        catch (Exception ex)
+                        {
+                            MSG.WriteLine($"导入失败: {ex.Message}");
+                        }
+                    });
+
+                    OutJson = $"已接收导入请求: {xmlPath}";
+                }
+                catch (Exception ex)
+                {
+                    OutJson = $"导入命令处理失败: {ex.Message}";
+                }
+            }
+
+        }
+
+
+        private class CmdResultObj_Appinfo
+        {
+            public string random1 { get; set; } = "";
+            public string state { get; set; } = ""; //ok or other
+            public string proxyport { get; set; } = "";
+            public string httpserverport { get; set; } = "";
+            public string consolehandle { get; set; } = "";
+        }
+
+        private string CmdFun_GetAppInfo()
+        {
+            string TemResult = "";
+            CmdResultObj_Appinfo TemObj = new CmdResultObj_Appinfo();
+            TemObj.random1 = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            TemObj.proxyport = Program.Global_ProxyPort;
+            TemObj.httpserverport = Program.Global_Http_Port;
+            TemObj.state = "ok";
+            IntPtr TemHandle = 0;
+            TemObj.consolehandle = TemHandle.ToInt64().ToString();
+            TemResult = TemObj.ToJson();
+            return (TemResult);
+        }
+
+
+        async private void CmdFun_TerminatApp()
+        {
+            await Task.Delay(100);
+            Environment.Exit(1);
+        }
+
+
+
+
+        //===================================================================================//
+        //以下是发送到界面应用程序的命令处理//
+
+
+
+        public static class To_UI_CMD
+        {
+            public static readonly string uicmd_httpserver_start = "uicmd_httpserver_start";
+        }
+
+
+
+        public class QuerySelfRecord
+        {
+            public string random1 { get; set; } = "";
+            public string global_logguidstr { get; set; } = "";
+            public string config_id { get; set; } = "";
+            public string token { get; set; } = "";
+            public string cmd { get; set; } = "";
+            public dynamic data { get; set; } = "";
+        }
+
+        //这个地方在一些机器上调用会出错,直接用ip 127.0.0.1访问住程序会出错，用localhost可以,或者互换
+        //public static string Global_ToUI_PostUrl = @"localhost:5757/query";//@"http://127.0.0.1:5757/query";
+        public static string Global_ToUI_PostUrl = @"http://localhost:5757/query";
+        public static string Global_ToUI_PostUrl_IP = @"http://127.0.0.1:5757/query";
+
+
+
+        /// <summary>
+        /// 向 UI 发送命令（带单个请求超时控制，异步版本）
+        /// </summary>
+        public async Task<bool> To_UI_PostCmdAsync(string CMD, dynamic InData,
+                                                         Action<string> OutTextSetter,
+                                                         bool useIp = false)
+        {
+            bool TemResult = false;
+            string ResponseText = "";
+
+            try
+            {
+                QuerySelfRecord TemObj = new QuerySelfRecord
+                {
+                    random1 = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    global_logguidstr = "",
+                    token = "",
+                    cmd = CMD,
+                    data = InData
+                };
+
+                string TemJsonText = JsonConvert.SerializeObject(TemObj, Formatting.Indented);
+
+                // 根据参数选择地址
+                string targetUrl = useIp ? Global_ToUI_PostUrl_IP : Global_ToUI_PostUrl;
+
+                using (var request = new HttpRequestMessage(HttpMethod.Post, targetUrl))
+                {
+                    request.Content = new StringContent(TemJsonText, Encoding.UTF8, "text/plain");
+                    // 如果服务端要求 text/plain，可以改成 "text/plain"
+
+                    // 设置请求头
+                    request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 6.1; Win64; x64)");
+                    request.Headers.Add("Accept", "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+
+                    // 设置单个请求超时（10秒）
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(10000)))
+                    using (var response = await client.SendAsync(request, cts.Token))
+                    {
+                        ResponseText = await response.Content.ReadAsStringAsync();
+
+                        if (string.IsNullOrEmpty(ResponseText))
+                        {
+                            ResponseText = "";
+                        }
+
+                        TemResult = response.IsSuccessStatusCode;
+                    }
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                ResponseText = "";
+                MSG.WriteLine("发送命令超时（超过10秒未响应）");
+                TemResult = false;
+            }
+            catch (Exception E)
+            {
+                ResponseText = "";
+                MSG.WriteLine($@"发送命令异常:{E.Message}");
+                TemResult = false;
+            }
+
+            OutTextSetter(ResponseText);
+            return TemResult;
+        }
+
+
+
+
+
+    }
+
+
+
+    public static class KestrelChecker
+    {
+        private static readonly HttpClient client = new HttpClient();
+
+        /// <summary>
+        /// 检查 Kestrel 是否正常提供 HTTP 服务（5秒超时，返回内容必须是 "OK"）
+        /// </summary>
+        /// <param name="url">要检查的地址，例如 http://localhost:7001/health</param>
+        /// <returns>返回 true 表示服务正常且返回 "OK"，否则返回 false</returns>
+        public static async Task<bool> CheckKestrelAsync(string url)
+        {
+            try
+            {
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+                using (var response = await client.GetAsync(url, cts.Token))
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        return false;
+                    }
+
+                    string content = await response.Content.ReadAsStringAsync();
+
+                    // 检查返回内容是否为 "OK"（忽略大小写和前后空格）
+                    return string.Equals(content?.Trim(), "OK", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                MSG.WriteLine("检查超时（超过5秒未响应）");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                MSG.WriteLine($"检查失败: {ex.Message}");
+                return false;
+            }
+        }
+    }
+
+
+
+
+}
