@@ -1,0 +1,649 @@
+using DLCA;
+using Dumpify;
+using Newtonsoft.Json.Linq;
+using SQLitePCL;
+using System;
+using System.Collections;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Data;
+using System.Data.SQLite;
+using System.Data.SqlTypes;
+using System.Dynamic;
+using System.IO;
+using System.Linq;
+using System.Reflection.Metadata;
+using System.Runtime.Loader;
+using System.Security.Cryptography;
+using System.Security.Policy;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml.Linq;
+
+
+
+
+
+
+namespace DLCA
+{
+
+
+    public class PersonDto
+    {
+        public string XingMing { get; set; } = "";
+        public string XingBie { get; set; } = "";
+        public string ChuShengNianYue { get; set; } = "";
+        public string MinZu { get; set; } = "";
+        public string JiGuan { get; set; } = "";
+        public string ChuShengDi { get; set; } = "";
+        public string RuDangShiJian { get; set; } = "";
+        public string CanJiaGongZuoShiJian { get; set; } = "";
+        public string JianKangZhuangKuang { get; set; } = "";
+        public string ZhuanYeJiShuZhiWu { get; set; } = "";
+        public string ShuXiZhuanYeYouHeZhuanChang { get; set; } = "";
+
+        public string QuanRiZhiJiaoYu_XueLi { get; set; } = "";
+        public string QuanRiZhiJiaoYu_XueWei { get; set; } = "";
+        public string QuanRiZhiJiaoYu_XueLi_BiYeYuanXiaoXi { get; set; } = "";
+        public string QuanRiZhiJiaoYu_XueWei_BiYeYuanXiaoXi { get; set; } = "";
+
+        public string ZaiZhiJiaoYu_XueLi { get; set; } = "";
+        public string ZaiZhiJiaoYu_XueWei { get; set; } = "";
+        public string ZaiZhiJiaoYu_XueLi_BiYeYuanXiaoXi { get; set; } = "";
+        public string ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi { get; set; } = "";
+
+        public string XianRenZhiWu { get; set; } = "";
+        public string NiRenZhiWu { get; set; } = "";
+        public string NiMianZhiWu { get; set; } = "";
+
+        public string JianLi { get; set; } = "";
+        public string JiangChengQingKuang { get; set; } = "";
+        public string NianDuKaoHeJieGuo { get; set; } = "";
+        public string RenMianLiYou { get; set; } = "";
+
+        public string JiaTingChengYuanJson { get; set; } = ""; // 家庭成员 JSON 字符串
+
+        public string ChengBaoDanWei { get; set; } = "";
+        public string JiSuanNianLingShiJian { get; set; } = "";
+        public string TianBiaoShiJian { get; set; } = "";
+        public string TianBiaoRen { get; set; } = "";
+        public string ShenFenZheng { get; set; } = "";
+        public string ZhaoPianBase64 { get; set; } = "";
+        public string Version { get; set; } = "";
+    }
+
+
+    public static class XmlPersonParser
+    {
+        public static PersonDto ParseFromXml(string filePath)
+        {
+            XDocument doc = XDocument.Load(filePath);
+            var person = doc.Element("Person");
+            if (person == null)
+                throw new Exception("未找到 <Person> 节点");
+
+            var dto = new PersonDto
+            {
+                XingMing = person.Element("XingMing")?.Value ?? "",
+                XingBie = person.Element("XingBie")?.Value ?? "",
+                ChuShengNianYue = person.Element("ChuShengNianYue")?.Value ?? "",
+                MinZu = person.Element("MinZu")?.Value ?? "",
+                JiGuan = person.Element("JiGuan")?.Value ?? "",
+                ChuShengDi = person.Element("ChuShengDi")?.Value ?? "",
+                RuDangShiJian = person.Element("RuDangShiJian")?.Value ?? "",
+                CanJiaGongZuoShiJian = person.Element("CanJiaGongZuoShiJian")?.Value ?? "",
+                JianKangZhuangKuang = person.Element("JianKangZhuangKuang")?.Value ?? "",
+                ZhuanYeJiShuZhiWu = person.Element("ZhuanYeJiShuZhiWu")?.Value ?? "",
+                ShuXiZhuanYeYouHeZhuanChang = person.Element("ShuXiZhuanYeYouHeZhuanChang")?.Value ?? "",
+
+                QuanRiZhiJiaoYu_XueLi = person.Element("QuanRiZhiJiaoYu_XueLi")?.Value ?? "",
+                QuanRiZhiJiaoYu_XueWei = person.Element("QuanRiZhiJiaoYu_XueWei")?.Value ?? "",
+                QuanRiZhiJiaoYu_XueLi_BiYeYuanXiaoXi = person.Element("QuanRiZhiJiaoYu_XueLi_BiYeYuanXiaoXi")?.Value ?? "",
+                QuanRiZhiJiaoYu_XueWei_BiYeYuanXiaoXi = person.Element("QuanRiZhiJiaoYu_XueWei_BiYeYuanXiaoXi")?.Value ?? "",
+
+                ZaiZhiJiaoYu_XueLi = person.Element("ZaiZhiJiaoYu_XueLi")?.Value ?? "",
+                ZaiZhiJiaoYu_XueWei = person.Element("ZaiZhiJiaoYu_XueWei")?.Value ?? "",
+                ZaiZhiJiaoYu_XueLi_BiYeYuanXiaoXi = person.Element("ZaiZhiJiaoYu_XueLi_BiYeYuanXiaoXi")?.Value ?? "",
+                ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi = person.Element("ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi")?.Value ?? "",
+
+                XianRenZhiWu = person.Element("XianRenZhiWu")?.Value ?? "",
+                NiRenZhiWu = person.Element("NiRenZhiWu")?.Value ?? "",
+                NiMianZhiWu = person.Element("NiMianZhiWu")?.Value ?? "",
+
+                JianLi = person.Element("JianLi")?.Value ?? "",
+                JiangChengQingKuang = person.Element("JiangChengQingKuang")?.Value ?? "",
+                NianDuKaoHeJieGuo = person.Element("NianDuKaoHeJieGuo")?.Value ?? "",
+                RenMianLiYou = person.Element("RenMianLiYou")?.Value ?? "",
+
+                ChengBaoDanWei = person.Element("ChengBaoDanWei")?.Value ?? "",
+                JiSuanNianLingShiJian = person.Element("JiSuanNianLingShiJian")?.Value ?? "",
+                TianBiaoShiJian = person.Element("TianBiaoShiJian")?.Value ?? "",
+                TianBiaoRen = person.Element("TianBiaoRen")?.Value ?? "",
+                ShenFenZheng = person.Element("ShenFenZheng")?.Value ?? "",
+                ZhaoPianBase64 = person.Element("ZhaoPian")?.Value ?? "",
+                Version = person.Element("Version")?.Value ?? ""
+            };
+
+            // 家庭成员 → JSON 字符串
+            var family = person.Element("JiaTingChengYuan")?
+                .Elements("Item")
+                .Select(m => new
+                {
+                    ChengWei = m.Element("ChengWei")?.Value ?? "",
+                    XingMing = m.Element("XingMing")?.Value ?? "",
+                    ChuShengRiQi = m.Element("ChuShengRiQi")?.Value ?? "",
+                    ZhengZhiMianMao = m.Element("ZhengZhiMianMao")?.Value ?? "",
+                    GongZuoDanWeiJiZhiWu = m.Element("GongZuoDanWeiJiZhiWu")?.Value ?? ""
+                }).ToList();
+
+            dto.JiaTingChengYuanJson = family == null ? "" : JsonConvert.SerializeObject(family);
+
+            return dto;
+        }
+    }
+
+
+    internal class DataModle
+    {
+
+        public DbHelpers DBHelpers;
+        public System.Data.SQLite.SQLiteConnection Connection = null;
+
+        public DataModle()
+        {
+            DBHelpers = new DbHelpers();
+            string TemDbPath = GetDwDbPathRecursive();
+            string TemError = "";
+            if (!string.IsNullOrEmpty(TemDbPath))
+            {
+                try
+                {
+                    Connection = DBHelpers.GetPhysicalDbConnection(TemDbPath);
+                }
+                catch (Exception ex)
+                { 
+                    TemError = ex.Message;
+                    Connection = null;
+                }
+            }
+            if( (Connection == null) || TemError!="")
+            {
+                MSG.WriteLine($@"打开数据文件失败:{TemError},路径:{TemDbPath}");
+            }
+        }
+
+        ~DataModle()
+        {
+            if (Connection != null)
+            {
+                Connection.Close();
+                Connection.Dispose();
+            }
+        }
+
+
+        private static string GetDwDbPathRecursive()
+        {
+            const string TemName = "dw.db";
+            string dir = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
+            while (!string.IsNullOrEmpty(dir))
+            {
+                string candidate = Path.Combine(dir, TemName);
+                //MSG.WriteLine($@"尝试目录:{candidate}");
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+
+                dir = Directory.GetParent(dir)?.FullName;
+            }
+            return "";
+        }
+
+
+
+        public void fun_TestData()
+        {
+            SQLiteCommand cmd = new SQLiteCommand(Connection);
+            SQLiteHelper sh = new SQLiteHelper(cmd);
+            sh.Select("select * from kslist;").Dump(tableConfig: new() { MaxCollectionCount = 5, ShowRowSeparators = true });
+            sh.GetTableList().Dump();
+            sh.ShowDatabase().Dump();
+            cmd.Dispose();
+        }
+
+
+        public void UpsertKslist(PersonDto p)
+        {
+            if (Connection == null)
+            {
+                MSG.WriteLine("数据库连接为空，无法导入。");
+                return;
+            }
+
+            // 1. 先查 ShenFenZheng 是否存在
+            long? existingId = null;
+            using (var checkCmd = new SQLiteCommand("SELECT myid FROM kslist WHERE ShenFenZheng = @sfz LIMIT 1;", Connection))
+            {
+                checkCmd.Parameters.AddWithValue("@sfz", p.ShenFenZheng ?? "");
+                var obj = checkCmd.ExecuteScalar();
+                if (obj != null && obj != DBNull.Value)
+                    existingId = (long)(obj);
+            }
+
+            string now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            byte[] photoBytes = null;
+            if (!string.IsNullOrWhiteSpace(p.ZhaoPianBase64))
+            {
+                try { photoBytes = Convert.FromBase64String(p.ZhaoPianBase64); }
+                catch { photoBytes = null; }
+            }
+
+            if (existingId == null)
+            {
+                // 2. 不存在 → INSERT
+                using (var cmd = new SQLiteCommand(Connection))
+                {
+                    cmd.CommandText = @"
+                    INSERT INTO kslist (
+                      ShenFenZheng, XingMing, XingBie, ChuShengNianYue, MinZu, JiGuan, ChuShengDi,
+                      RuDangShiJian, CanJiaGongZuoShiJian, JianKangZhuangKuang, ZhuanYeJiShuZhiWu,
+                      ShuXiZhuanYeYouHeZhuanChang, QuanRiZhiJiaoYu_XueLi, QuanRiZhiJiaoYu_XueWei,
+                      QuanRiZhiJiaoYu_XueLi_BiYeYuanXiaoXi, QuanRiZhiJiaoYu_XueWei_BiYeYuanXiaoXi,
+                      ZaiZhiJiaoYu_XueLi, ZaiZhiJiaoYu_XueWei, ZaiZhiJiaoYu_XueLi_BiYeYuanXiaoXi,
+                      ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi, XianRenZhiWu, NiRenZhiWu, NiMianZhiWu,
+                      JianLi, JiangChengQingKuang, NianDuKaoHeJieGuo, RenMianLiYou, JiaTingChengYuan,
+                      ChengBaoDanWei, JiSuanNianLingShiJian, TianBiaoShiJian, TianBiaoRen,
+                      ZhaoPian, Version, NianLing, XiuGaiShiJian, ChuangJianShiJian
+                    ) VALUES (
+                      @ShenFenZheng, @XingMing, @XingBie, @ChuShengNianYue, @MinZu, @JiGuan, @ChuShengDi,
+                      @RuDangShiJian, @CanJiaGongZuoShiJian, @JianKangZhuangKuang, @ZhuanYeJiShuZhiWu,
+                      @ShuXiZhuanYeYouHeZhuanChang, @QuanRiZhiJiaoYu_XueLi, @QuanRiZhiJiaoYu_XueWei,
+                      @QuanRiZhiJiaoYu_XueLi_BiYeYuanXiaoXi, @QuanRiZhiJiaoYu_XueWei_BiYeYuanXiaoXi,
+                      @ZaiZhiJiaoYu_XueLi, @ZaiZhiJiaoYu_XueWei, @ZaiZhiJiaoYu_XueLi_BiYeYuanXiaoXi,
+                      @ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi, @XianRenZhiWu, @NiRenZhiWu, @NiMianZhiWu,
+                      @JianLi, @JiangChengQingKuang, @NianDuKaoHeJieGuo, @RenMianLiYou, @JiaTingChengYuan,
+                      @ChengBaoDanWei, @JiSuanNianLingShiJian, @TianBiaoShiJian, @TianBiaoRen,
+                      @ZhaoPian, @Version, @NianLing, @XiuGaiShiJian, @ChuangJianShiJian
+                    );";
+                    FillCommonParameters(cmd, p, photoBytes, now, now);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            else
+            {
+                // 3. 已存在 → UPDATE
+                using (var cmd = new SQLiteCommand(Connection))
+                {
+                    cmd.CommandText = @"
+                    UPDATE kslist SET
+                      XingMing=@XingMing, XingBie=@XingBie, ChuShengNianYue=@ChuShengNianYue,
+                      MinZu=@MinZu, JiGuan=@JiGuan, ChuShengDi=@ChuShengDi,
+                      RuDangShiJian=@RuDangShiJian, CanJiaGongZuoShiJian=@CanJiaGongZuoShiJian,
+                      JianKangZhuangKuang=@JianKangZhuangKuang, ZhuanYeJiShuZhiWu=@ZhuanYeJiShuZhiWu,
+                      ShuXiZhuanYeYouHeZhuanChang=@ShuXiZhuanYeYouHeZhuanChang,
+                      QuanRiZhiJiaoYu_XueLi=@QuanRiZhiJiaoYu_XueLi,
+                      QuanRiZhiJiaoYu_XueWei=@QuanRiZhiJiaoYu_XueWei,
+                      QuanRiZhiJiaoYu_XueLi_BiYeYuanXiaoXi=@QuanRiZhiJiaoYu_XueLi_BiYeYuanXiaoXi,
+                      QuanRiZhiJiaoYu_XueWei_BiYeYuanXiaoXi=@QuanRiZhiJiaoYu_XueWei_BiYeYuanXiaoXi,
+                      ZaiZhiJiaoYu_XueLi=@ZaiZhiJiaoYu_XueLi,
+                      ZaiZhiJiaoYu_XueWei=@ZaiZhiJiaoYu_XueWei,
+                      ZaiZhiJiaoYu_XueLi_BiYeYuanXiaoXi=@ZaiZhiJiaoYu_XueLi_BiYeYuanXiaoXi,
+                      ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi=@ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi,
+                      XianRenZhiWu=@XianRenZhiWu, NiRenZhiWu=@NiRenZhiWu, NiMianZhiWu=@NiMianZhiWu,
+                      JianLi=@JianLi, JiangChengQingKuang=@JiangChengQingKuang,
+                      NianDuKaoHeJieGuo=@NianDuKaoHeJieGuo, RenMianLiYou=@RenMianLiYou,
+                      JiaTingChengYuan=@JiaTingChengYuan, ChengBaoDanWei=@ChengBaoDanWei,
+                      JiSuanNianLingShiJian=@JiSuanNianLingShiJian, TianBiaoShiJian=@TianBiaoShiJian,
+                      TianBiaoRen=@TianBiaoRen, ZhaoPian=@ZhaoPian, Version=@Version,
+                      NianLing=@NianLing, XiuGaiShiJian=@XiuGaiShiJian
+                    WHERE ShenFenZheng=@ShenFenZheng;";
+                    FillCommonParameters(cmd, p, photoBytes, now, null);
+                    cmd.Parameters.AddWithValue("@ShenFenZheng", p.ShenFenZheng ?? "");
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private void FillCommonParameters(SQLiteCommand cmd, PersonDto p, byte[] photoBytes, string xiuGai, string? chuangJian)
+        {
+            cmd.Parameters.AddWithValue("@ShenFenZheng", p.ShenFenZheng ?? "");
+            cmd.Parameters.AddWithValue("@XingMing", p.XingMing ?? "");
+            cmd.Parameters.AddWithValue("@XingBie", p.XingBie ?? "");
+            cmd.Parameters.AddWithValue("@ChuShengNianYue", p.ChuShengNianYue ?? "");
+            cmd.Parameters.AddWithValue("@MinZu", p.MinZu ?? "");
+            cmd.Parameters.AddWithValue("@JiGuan", p.JiGuan ?? "");
+            cmd.Parameters.AddWithValue("@ChuShengDi", p.ChuShengDi ?? "");
+            cmd.Parameters.AddWithValue("@RuDangShiJian", p.RuDangShiJian ?? "");
+            cmd.Parameters.AddWithValue("@CanJiaGongZuoShiJian", p.CanJiaGongZuoShiJian ?? "");
+            cmd.Parameters.AddWithValue("@JianKangZhuangKuang", p.JianKangZhuangKuang ?? "");
+            cmd.Parameters.AddWithValue("@ZhuanYeJiShuZhiWu", p.ZhuanYeJiShuZhiWu ?? "");
+            cmd.Parameters.AddWithValue("@ShuXiZhuanYeYouHeZhuanChang", p.ShuXiZhuanYeYouHeZhuanChang ?? "");
+
+            cmd.Parameters.AddWithValue("@QuanRiZhiJiaoYu_XueLi", p.QuanRiZhiJiaoYu_XueLi ?? "");
+            cmd.Parameters.AddWithValue("@QuanRiZhiJiaoYu_XueWei", p.QuanRiZhiJiaoYu_XueWei ?? "");
+            cmd.Parameters.AddWithValue("@QuanRiZhiJiaoYu_XueLi_BiYeYuanXiaoXi", p.QuanRiZhiJiaoYu_XueLi_BiYeYuanXiaoXi ?? "");
+            cmd.Parameters.AddWithValue("@QuanRiZhiJiaoYu_XueWei_BiYeYuanXiaoXi", p.QuanRiZhiJiaoYu_XueWei_BiYeYuanXiaoXi ?? "");
+
+            cmd.Parameters.AddWithValue("@ZaiZhiJiaoYu_XueLi", p.ZaiZhiJiaoYu_XueLi ?? "");
+            cmd.Parameters.AddWithValue("@ZaiZhiJiaoYu_XueWei", p.ZaiZhiJiaoYu_XueWei ?? "");
+            cmd.Parameters.AddWithValue("@ZaiZhiJiaoYu_XueLi_BiYeYuanXiaoXi", p.ZaiZhiJiaoYu_XueLi_BiYeYuanXiaoXi ?? "");
+            cmd.Parameters.AddWithValue("@ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi", p.ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi ?? "");
+
+            cmd.Parameters.AddWithValue("@XianRenZhiWu", p.XianRenZhiWu ?? "");
+            cmd.Parameters.AddWithValue("@NiRenZhiWu", p.NiRenZhiWu ?? "");
+            cmd.Parameters.AddWithValue("@NiMianZhiWu", p.NiMianZhiWu ?? "");
+
+            cmd.Parameters.AddWithValue("@JianLi", p.JianLi ?? "");
+            cmd.Parameters.AddWithValue("@JiangChengQingKuang", p.JiangChengQingKuang ?? "");
+            cmd.Parameters.AddWithValue("@NianDuKaoHeJieGuo", p.NianDuKaoHeJieGuo ?? "");
+            cmd.Parameters.AddWithValue("@RenMianLiYou", p.RenMianLiYou ?? "");
+
+            cmd.Parameters.AddWithValue("@JiaTingChengYuan", p.JiaTingChengYuanJson ?? "");
+            cmd.Parameters.AddWithValue("@ChengBaoDanWei", p.ChengBaoDanWei ?? "");
+            cmd.Parameters.AddWithValue("@JiSuanNianLingShiJian", p.JiSuanNianLingShiJian ?? "");
+            cmd.Parameters.AddWithValue("@TianBiaoShiJian", p.TianBiaoShiJian ?? "");
+            cmd.Parameters.AddWithValue("@TianBiaoRen", p.TianBiaoRen ?? "");
+
+            cmd.Parameters.AddWithValue("@ZhaoPian", (object?)photoBytes ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@Version", p.Version ?? "");
+
+            cmd.Parameters.AddWithValue("@NianLing", ""); // 如需可根据出生年月计算
+            cmd.Parameters.AddWithValue("@XiuGaiShiJian", xiuGai);
+            if (chuangJian != null)
+                cmd.Parameters.AddWithValue("@ChuangJianShiJian", chuangJian);
+        }
+
+
+
+
+
+        public void UpsertKsJiating(string shenFenZheng, string jiaTingChengYuanJson)
+        {
+            if (Connection == null)
+            {
+                MSG.WriteLine("数据库连接为空，无法导入家庭成员。");
+                return;
+            }
+
+            JArray arr = string.IsNullOrWhiteSpace(jiaTingChengYuanJson) ? new JArray() : JArray.Parse(jiaTingChengYuanJson);
+            int totalCount = 15; // 固定生成 15 条
+            int index = 1;
+
+            using (var tran = Connection.BeginTransaction())
+            {
+                try
+                {
+                    // 1. 删除旧的家庭成员记录（在事务里）
+                    using (var delCmd = new SQLiteCommand("DELETE FROM ksjiating WHERE ShenFenZheng=@sfz;", Connection, tran))
+                    {
+                        delCmd.Parameters.AddWithValue("@sfz", shenFenZheng ?? "");
+                        delCmd.ExecuteNonQuery();
+                    }
+
+                    // 2. 插入新数据（实际成员 + 补齐空记录）
+                    using (var insCmd = new SQLiteCommand(@"
+                        INSERT INTO ksjiating (
+                            ShenFenZheng, PaiXuId, ChengWei, XingMing, ChuShengRiQi, ZhengZhiMianMao, GongZuoDanWeiJiZhiWu
+                        ) VALUES (
+                            @ShenFenZheng, @PaiXuId, @ChengWei, @XingMing, @ChuShengRiQi, @ZhengZhiMianMao, @GongZuoDanWeiJiZhiWu
+                        );", Connection, tran))
+                    {
+                        insCmd.Parameters.Add("@ShenFenZheng", System.Data.DbType.String);
+                        insCmd.Parameters.Add("@PaiXuId", System.Data.DbType.Int32);
+                        insCmd.Parameters.Add("@ChengWei", System.Data.DbType.String);
+                        insCmd.Parameters.Add("@XingMing", System.Data.DbType.String);
+                        insCmd.Parameters.Add("@ChuShengRiQi", System.Data.DbType.String);
+                        insCmd.Parameters.Add("@ZhengZhiMianMao", System.Data.DbType.String);
+                        insCmd.Parameters.Add("@GongZuoDanWeiJiZhiWu", System.Data.DbType.String);
+
+                        // 插入实际成员
+                        foreach (var item in arr)
+                        {
+                            if (index > totalCount) break;
+
+                            insCmd.Parameters["@ShenFenZheng"].Value = shenFenZheng ?? "";
+                            insCmd.Parameters["@PaiXuId"].Value = index;
+                            insCmd.Parameters["@ChengWei"].Value = (string?)item["ChengWei"] ?? "";
+                            insCmd.Parameters["@XingMing"].Value = (string?)item["XingMing"] ?? "";
+                            insCmd.Parameters["@ChuShengRiQi"].Value = (string?)item["ChuShengRiQi"] ?? "";
+                            insCmd.Parameters["@ZhengZhiMianMao"].Value = (string?)item["ZhengZhiMianMao"] ?? "";
+                            insCmd.Parameters["@GongZuoDanWeiJiZhiWu"].Value = (string?)item["GongZuoDanWeiJiZhiWu"] ?? "";
+                            insCmd.ExecuteNonQuery();
+
+                            index++;
+                        }
+
+                        // 补齐空记录
+                        while (index <= totalCount)
+                        {
+                            insCmd.Parameters["@ShenFenZheng"].Value = shenFenZheng ?? "";
+                            insCmd.Parameters["@PaiXuId"].Value = index;
+                            insCmd.Parameters["@ChengWei"].Value = "";
+                            insCmd.Parameters["@XingMing"].Value = "";
+                            insCmd.Parameters["@ChuShengRiQi"].Value = "";
+                            insCmd.Parameters["@ZhengZhiMianMao"].Value = "";
+                            insCmd.Parameters["@GongZuoDanWeiJiZhiWu"].Value = "";
+                            insCmd.ExecuteNonQuery();
+
+                            index++;
+                        }
+                    }
+
+                    // 3. 提交事务
+                    tran.Commit();
+                    MSG.WriteLine($"身份证 {shenFenZheng} 的家庭成员已更新，共 {totalCount} 条（实际 {arr.Count} 条，补齐 {totalCount - arr.Count} 条）。");
+                }
+                catch (Exception ex)
+                {
+                    // 出错时回滚事务
+                    tran.Rollback();
+                    MSG.WriteLine($"导入家庭成员失败，已回滚事务。错误信息: {ex.Message}");
+                }
+            }
+        }
+
+
+
+
+
+
+
+        public void ImportXmlFileToDwDb(string xmlPath)
+        {
+            try
+            {
+                // 1. 解析 XML → PersonDto
+                var dto = XmlPersonParser.ParseFromXml(xmlPath);
+
+                // 2. 插入或更新 kslist（直接用当前实例）
+                this.UpsertKslist(dto);
+                this.UpsertKsJiating(dto.ShenFenZheng, dto.JiaTingChengYuanJson); // 插入或更新 ksjiating
+
+                MSG.WriteLine($"成功导入或更新记录：{dto.XingMing} ({dto.ShenFenZheng})");
+            }
+            catch (Exception ex)
+            {
+                MSG.WriteLine($"导入失败: {ex.Message}");
+            }
+        }
+
+
+
+    } // end class DataModle
+
+
+
+
+    public interface IDbHelpers
+    {
+        System.Data.SQLite.SQLiteConnection GetPhysicalDbConnection();
+        System.Data.SQLite.SQLiteConnection GetInMemoryDbConnection();
+    }
+
+    public class DbHelpers : IDbHelpers
+    {
+        public readonly string dbFilePath = @$"{Environment.CurrentDirectory}\test.db";
+        private System.Data.SQLite.SQLiteConnection inMemoryDbConnection = null;
+        public DbHelpers()
+        {
+
+        }
+        public System.Data.SQLite.SQLiteConnection GetPhysicalDbConnection()
+        {
+            var dbConnection = new System.Data.SQLite.SQLiteConnection("Data Source =" + dbFilePath + ";Mode=ReadWrite;Journal Mode=WAL;BusyTimeout=10000;");
+            dbConnection.Open();
+            return dbConnection;
+        }
+
+        public System.Data.SQLite.SQLiteConnection GetPhysicalDbConnection(string InLocalFile)
+        {
+            var dbConnection = new System.Data.SQLite.SQLiteConnection("Data Source =" + InLocalFile + ";Mode=ReadWriteCreate;Journal Mode=WAL;BusyTimeout=10000;");
+            dbConnection.Open();
+            return dbConnection;
+        }
+
+        public System.Data.SQLite.SQLiteConnection GetInMemoryDbConnection()
+        {
+            if (inMemoryDbConnection == null)
+            {
+                inMemoryDbConnection = new System.Data.SQLite.SQLiteConnection("Data Source=:memory:;Version=3;");
+                inMemoryDbConnection.Open();
+                return inMemoryDbConnection;
+            }
+            return inMemoryDbConnection;
+        }
+
+        public System.Data.SQLite.SQLiteConnection GetInMemoryDbConnection(byte[] Inbytes)
+        {
+            var conn = new System.Data.SQLite.SQLiteConnection("Data Source=:memory:;Version=3;New=True;");
+            conn.Open();
+            conn.Deserialize("main", Inbytes, false);
+            return conn;
+        }
+
+        public System.Data.SQLite.SQLiteConnection CreateShareMemConnection(byte[] Inbytes, string DataBaseName = "sharedMem")
+        {
+            //共享缓存可用于 内存数据库，前提是该数据库是使用URI 文件名创建的
+            //FullUri=file::memory:?cache=shared
+            //FullUri=file:sharedMem?mode=memory&cache=shared;
+            //Data Source=file:sharedMem?mode=memory&cache=shared
+            //FullUri=file:/TEST;VfsName=memdb
+            //string TemConnStr = $@"FullUri=file:{DataBaseName}?mode=memory&cache=shared";
+            string TemConnStr = $@"FullUri=file:/{DataBaseName};VfsName=memdb;Journal Mode=WAL;BusyTimeout=30000;Synchronous=Normal;Max Pool Size=2000;Pooling=True;";
+            //这个连接可以生成本地文件//
+            //string TemConnStr = $@"FullUri=file:{DataBaseName};Journal Mode=WAL;BusyTimeout=30000;Synchronous=Normal;Max Pool Size=2000;Pooling=True;";
+            var conn = new System.Data.SQLite.SQLiteConnection(TemConnStr);
+            conn.Open();
+            conn.Deserialize("main", Inbytes, false);
+            var conn2 = new System.Data.SQLite.SQLiteConnection(TemConnStr);
+            conn2.BusyTimeout = 30000;
+            conn2.Open();
+            //通过备份数据库来共享内存数据库内容//
+            conn.BackupDatabase(conn2,
+                      sourceName: "main",
+                      destinationName: "main",
+                      pages: -1,
+                      callback: null,
+                      retryMilliseconds: 0);
+            conn.Close();
+            conn.Dispose();
+            return conn2;
+        }
+
+        public System.Data.SQLite.SQLiteConnection ShareMemConnection(string DataBaseName = "sharedMem")
+        {
+            //string TemConnStr = $@"FullUri=file:{DataBaseName}?mode=memory&cache=shared";
+            string TemConnStr = $@"FullUri=file:/{DataBaseName};VfsName=memdb;Journal Mode=WAL;BusyTimeout=30000;Synchronous=Normal;Max Pool Size=2000;Pooling=True;";
+            //这个连接可以生成本地文件//
+            //string TemConnStr = $@"FullUri=file:{DataBaseName};Journal Mode=WAL;BusyTimeout=30000;Synchronous=Normal;Max Pool Size=2000;Pooling=True;";
+            var conn = new System.Data.SQLite.SQLiteConnection(TemConnStr);
+            conn.BusyTimeout = 30000;
+            conn.Open();
+            /*
+            var csb = new SQLiteConnectionStringBuilder
+            {
+                DataSource = "test.db",
+                Version = 3,
+                BusyTimeout = 5000
+            };
+            */
+            return conn;
+        }
+
+
+        public static string GetCreateTableSql(DataTable dt, string tableName)
+        {
+            var cols = new List<string>();
+            foreach (DataColumn col in dt.Columns)
+            {
+                //Console.WriteLine($@"col.DataType:{col.DataType.Name}");
+                string sqlType = col.DataType == typeof(int) ? "INTEGER"
+                                : col.DataType == typeof(long) ? "INTEGER"
+                                : col.DataType == typeof(bool) ? "INTEGER"
+                                : col.DataType == typeof(double) ? "REAL"
+                                : col.DataType == typeof(decimal) ? "REAL"
+                                : col.DataType == typeof(byte[]) ? "BLOB"
+                                : col.DataType == typeof(DateTime) ? "TEXT"
+                                : col.DataType == typeof(string) ? "TEXT"
+                                : "NUMERIC";
+
+                var parts = new List<string> { $"\"{col.ColumnName}\"", sqlType };
+
+                if (!col.AllowDBNull) parts.Add("NOT NULL");
+                if (col.AutoIncrement) parts.Add("PRIMARY KEY AUTOINCREMENT");
+                else if (dt.PrimaryKey.Contains(col))
+                    parts.Add("PRIMARY KEY");
+
+                cols.Add(string.Join(" ", parts));
+            }
+
+            return $"CREATE TABLE IF NOT EXISTS \"{tableName}\" (\n  "
+                 + string.Join(",\n  ", cols)
+                 + "\n);";
+        }
+
+        public static void BulkInsert(SQLiteConnection conn, DataTable dt, string tableName)
+        {
+            using (var tran = conn.BeginTransaction())
+            {
+                // 1. 创建新表
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = GetCreateTableSql(dt, tableName);
+                    cmd.ExecuteNonQuery();
+                }
+
+                // 2. 准备 INSERT 命令
+                string colList = string.Join(", ", dt.Columns.Cast<DataColumn>().Select(c => $"\"{c.ColumnName}\""));
+                string paramList = string.Join(", ", dt.Columns.Cast<DataColumn>().Select(c => $"@{c.ColumnName}"));
+                string insertSql = $"INSERT INTO \"{tableName}\" ({colList}) VALUES ({paramList})";
+
+                using (var insertCmd = conn.CreateCommand())
+                {
+                    insertCmd.CommandText = insertSql;
+                    // 参数定义
+                    foreach (DataColumn col in dt.Columns)
+                        insertCmd.Parameters.Add(new SQLiteParameter($"@{col.ColumnName}", DbType.Object));
+                    insertCmd.Prepare();
+
+                    // 3. 遍历所有 DataRow
+                    foreach (DataRow row in dt.Rows)
+                    {
+                        foreach (DataColumn col in dt.Columns)
+                            insertCmd.Parameters[$"@{col.ColumnName}"].Value = row[col] ?? DBNull.Value;
+                        insertCmd.ExecuteNonQuery();
+                    }
+                }
+
+                // 4. 提交
+                tran.Commit();
+            }
+        }
+    }
+
+
+}
