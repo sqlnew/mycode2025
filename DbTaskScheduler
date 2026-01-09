@@ -1,0 +1,129 @@
+using System;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+
+
+namespace DLCA
+{
+    /// <summary>
+    /// 单线程调度器，保证所有数据库操作顺序执行。
+    /// 每个任务带超时保护，避免阻塞整个队列。
+    /// </summary>
+    public class DbTaskScheduler
+    {
+        private readonly Channel<Func<Task>> _channel = Channel.CreateUnbounded<Func<Task>>();
+        private readonly int _defaultTimeoutMs;
+
+        public DbTaskScheduler(int defaultTimeoutMs = 10000)
+        {
+            _defaultTimeoutMs = defaultTimeoutMs;
+
+            // 启动后台线程
+            Task.Run(async () =>
+            {
+                await foreach (var work in _channel.Reader.ReadAllAsync())
+                {
+                    try
+                    {
+                        using var cts = new CancellationTokenSource(_defaultTimeoutMs);
+                        var task = work();
+
+                        // 等待任务完成或超时
+                        var completed = await Task.WhenAny(task, Task.Delay(Timeout.Infinite, cts.Token));
+                        if (completed != task)
+                        {
+                            MSG.WriteLine("数据库任务超时，已跳过。");
+                        }
+                        else
+                        {
+                            await task; // 捕获异常
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        MSG.WriteLine($"数据库操作错误: {ex.Message}");
+                    }
+                }
+            });
+        }
+
+        /// <summary>
+        /// 投递一个任务到调度器（带超时保护）
+        /// </summary>
+        public void Schedule(Action work, int? timeoutMs = null)
+        {
+            _channel.Writer.TryWrite(() =>
+            {
+                return Task.Run(() =>
+                {
+                    try
+                    {
+                        work();
+                    }
+                    catch (Exception ex)
+                    {
+                        MSG.WriteLine($"任务执行异常: {ex.Message}");
+                        throw;
+                    }
+                });
+            });
+        }
+
+        /// <summary>
+        /// 投递一个异步任务到调度器（带超时保护）
+        /// </summary>
+        public void ScheduleAsync(Func<Task> work, int? timeoutMs = null)
+        {
+            _channel.Writer.TryWrite(() =>
+            {
+                return Task.Run(async () =>
+                {
+                    try
+                    {
+                        await work();
+                    }
+                    catch (Exception ex)
+                    {
+                        MSG.WriteLine($"任务执行异常: {ex.Message}");
+                        throw;
+                    }
+                });
+            });
+        }
+    }
+}
+
+
+/*
+namespace DLCA
+{
+    public class DbTaskScheduler
+    {
+        private readonly Channel<Action> _channel = Channel.CreateUnbounded<Action>();
+
+        public DbTaskScheduler()
+        {
+            Task.Run(async () =>
+            {
+                await foreach (var work in _channel.Reader.ReadAllAsync())
+                {
+                    try
+                    {
+                        work();
+                    }
+                    catch (Exception ex)
+                    {
+                        MSG.WriteLine($"数据库操作错误: {ex.Message}");
+                    }
+                }
+            });
+        }
+
+        public void Schedule(Action work)
+        {
+            _channel.Writer.TryWrite(work);
+        }
+    }
+}
+
+*/
