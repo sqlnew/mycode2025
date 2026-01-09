@@ -147,6 +147,95 @@ namespace DLCA
                 }
             }
 
+
+            // 批量导入 XML/LRMX 文件（支持单文件、多文件、目录） //
+            /*
+            单文件导入 "d:\\temp4\\张三.lrmx"
+            多文件导入 "d:\\temp4\\张三.lrmx;d:\\temp4\\李四.lrmx"
+            目录导入 "d:\\temp4\\考生数据"
+            */
+            // 批量导入 XML/LRMX 文件（支持单文件、多文件、目录） //
+            if (TemCmd == "localcmd_importxml")
+            {
+                try
+                {
+                    string input = TemQuery.data?.ToString() ?? "";
+                    if (string.IsNullOrWhiteSpace(input))
+                    {
+                        OutJson = "缺少文件或目录路径";
+                        return;
+                    }
+
+                    List<string> filesToImport = new List<string>();
+
+                    // 判断是否为目录
+                    if (System.IO.Directory.Exists(input))
+                    {
+                        // 扫描目录下所有 .lrmx 和 .xml 文件
+                        string[] lrmxFiles = System.IO.Directory.GetFiles(input, "*.lrmx", SearchOption.TopDirectoryOnly);
+                        string[] xmlFiles = System.IO.Directory.GetFiles(input, "*.xml", SearchOption.TopDirectoryOnly);
+
+                        filesToImport.AddRange(lrmxFiles);
+                        filesToImport.AddRange(xmlFiles);
+                    }
+                    else
+                    {
+                        // 按分号分割多个文件路径
+                        string[] paths = input.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var path in paths)
+                        {
+                            string filePath = path.Trim();
+                            if (!string.IsNullOrWhiteSpace(filePath))
+                            {
+                                // 检查文件是否存在
+                                if (System.IO.File.Exists(filePath))
+                                {
+                                    filesToImport.Add(filePath);
+                                }
+                                else
+                                {
+                                    string fileName = System.IO.Path.GetFileName(filePath);
+                                    MSG.WriteLine($"跳过：文件 {fileName} 不存在。");
+                                }
+                            }
+                        }
+                    }
+
+                    if (filesToImport.Count == 0)
+                    {
+                        OutJson = "未找到可导入的文件";
+                        return;
+                    }
+
+                    // 投递到调度器逐个导入
+                    foreach (var file in filesToImport)
+                    {
+                        Program.GlobalDbScheduler.Schedule(() =>
+                        {
+                            try
+                            {
+                                Program.GlobalData.ImportXmlFileToDwDb(file);
+                                string fileName = System.IO.Path.GetFileName(file);
+                                MSG.WriteLine($"成功导入文件: {fileName}\r\n");
+                            }
+                            catch (Exception ex)
+                            {
+                                string fileName = System.IO.Path.GetFileName(file);
+                                MSG.WriteLine($"导入失败 [{fileName}]: {ex.Message}\r\n");
+                            }
+                        });
+                    }
+
+                    OutJson = $"已接收导入请求，共 {filesToImport.Count} 个文件。";
+                }
+                catch (Exception ex)
+                {
+                    OutJson = $"导入命令处理失败: {ex.Message}";
+                }
+            } //end localcmd_importxml
+
+
+
         }
 
 
@@ -324,6 +413,106 @@ namespace DLCA
                 MSG.WriteLine($"检查失败: {ex.Message}");
                 return false;
             }
+        }
+    }
+
+
+
+
+
+    public static class DateNormalizer
+    {
+        public static string NormalizeChuShengNianYue(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return "";
+
+            string s = input.Trim();
+
+            // 统一分隔符
+            s = s.Replace("年", "/").Replace("月", "/").Replace("日", "")
+                 .Replace(".", "/").Replace("-", "/").Replace("//", "/");
+
+            // 纯数字情况
+            if (Regex.IsMatch(s, @"^\d{8}$")) // yyyyMMdd
+            {
+                if (DateTime.TryParseExact(s, "yyyyMMdd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var dt))
+                    return dt.ToString("yyyy-MM-dd");
+            }
+            if (Regex.IsMatch(s, @"^\d{6}$")) // yyyyMM
+            {
+                if (DateTime.TryParseExact(s, "yyyyMM", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var dt))
+                    return new DateTime(dt.Year, dt.Month, 1).ToString("yyyy-MM-dd");
+            }
+            if (Regex.IsMatch(s, @"^\d{4}$")) // yyyy
+            {
+                if (int.TryParse(s, out var year))
+                    return new DateTime(year, 1, 1).ToString("yyyy-MM-dd");
+            }
+
+            // 分隔符情况 (支持 /)
+            var parts = s.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                if (int.TryParse(parts[0], out var y) &&
+                    int.TryParse(parts[1], out var m))
+                {
+                    y = NormalizeYear(y);
+                    int d = (parts.Length >= 3 && int.TryParse(parts[2], out var day)) ? day : 1;
+                    try
+                    {
+                        return new DateTime(y, m, d).ToString("yyyy-MM-dd");
+                    }
+                    catch { return ""; }
+                }
+            }
+            else if (parts.Length == 1)
+            {
+                if (int.TryParse(parts[0], out var y))
+                {
+                    y = NormalizeYear(y);
+                    return new DateTime(y, 1, 1).ToString("yyyy-MM-dd");
+                }
+            }
+
+            // 正则匹配中文格式
+            var m1 = Regex.Match(input, @"^(?<year>\d{2,4})年(?<month>\d{1,2})月(?<day>\d{1,2})?$");
+            if (m1.Success)
+            {
+                int y = NormalizeYear(int.Parse(m1.Groups["year"].Value));
+                int m = int.Parse(m1.Groups["month"].Value);
+                int d = m1.Groups["day"].Success ? int.Parse(m1.Groups["day"].Value) : 1;
+                return new DateTime(y, m, d).ToString("yyyy-MM-dd");
+            }
+
+            var m2 = Regex.Match(input, @"^(?<year>\d{2,4})年(?<month>\d{1,2})$");
+            if (m2.Success)
+            {
+                int y = NormalizeYear(int.Parse(m2.Groups["year"].Value));
+                int m = int.Parse(m2.Groups["month"].Value);
+                return new DateTime(y, m, 1).ToString("yyyy-MM-dd");
+            }
+
+            var m3 = Regex.Match(input, @"^(?<year>\d{2,4})年$");
+            if (m3.Success)
+            {
+                int y = NormalizeYear(int.Parse(m3.Groups["year"].Value));
+                return new DateTime(y, 1, 1).ToString("yyyy-MM-dd");
+            }
+
+            // 如果都不匹配，返回空字符串
+            return "";
+        }
+
+        private static int NormalizeYear(int year)
+        {
+            if (year < 100)
+            {
+                if (year <= 29) return 2000 + year; // 00–29 → 2000–2029
+                else return 1900 + year;            // 30–99 → 1930–1999
+            }
+            return year;
         }
     }
 
