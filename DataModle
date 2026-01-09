@@ -459,9 +459,19 @@ namespace DLCA
                 // 1. 解析 XML → PersonDto
                 var dto = XmlPersonParser.ParseFromXml(xmlPath);
 
-                // 2. 插入或更新 kslist（直接用当前实例）
+                // 2. 检查身份证号是否为空或缺失
+                if (string.IsNullOrWhiteSpace(dto.ShenFenZheng))
+                {
+                    string fileName = Path.GetFileName(xmlPath);
+                    MSG.WriteLine($"导入失败：XML 文件 {fileName} 中身份证号缺失或为空，已跳过。");
+                    return;
+                }
+
+                // 3. 插入或更新 kslist（直接用当前实例）
                 this.UpsertKslist(dto);
-                this.UpsertKsJiating(dto.ShenFenZheng, dto.JiaTingChengYuanJson); // 插入或更新 ksjiating
+
+                // 4. 插入或更新 ksjiating
+                this.UpsertKsJiating(dto.ShenFenZheng, dto.JiaTingChengYuanJson); 
 
                 MSG.WriteLine($"成功导入或更新记录：{dto.XingMing} ({dto.ShenFenZheng})");
             }
