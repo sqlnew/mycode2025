@@ -451,6 +451,66 @@ namespace DLCA
         }
 
 
+        // 更新或添加简历条目//
+        public void UpsertKsJianLi(string shenFenZheng, string jianliText)
+        {
+            if (Connection == null)
+            {
+                MSG.WriteLine("数据库连接为空，无法导入简历。");
+                return;
+            }
+
+            var items = JianLiParser.Parse(jianliText ?? "");
+
+            using (var tran = Connection.BeginTransaction())
+            {
+                try
+                {
+                    // 1. 删除旧记录
+                    using (var delCmd = new SQLiteCommand("DELETE FROM ksjianli WHERE ShenFenZheng=@sfz;", Connection, tran))
+                    {
+                        delCmd.Parameters.AddWithValue("@sfz", shenFenZheng ?? "");
+                        delCmd.ExecuteNonQuery();
+                    }
+
+                    // 2. 插入新记录（保持输入顺序，PaiXuId从1递增）
+                    using (var insCmd = new SQLiteCommand(@"
+                            INSERT INTO ksjianli (
+                                ShenFenZheng, PaiXuId, KaiShiNianYue, JieShuNianYue, JianLiNeiRong
+                            )
+                            VALUES (
+                                @ShenFenZheng, @PaiXuId, @KaiShiNianYue, @JieShuNianYue, @JianLiNeiRong
+                            );
+                        ", Connection, tran))
+                    {
+                        insCmd.Parameters.Add("@ShenFenZheng", DbType.String);
+                        insCmd.Parameters.Add("@PaiXuId", DbType.Int32);
+                        insCmd.Parameters.Add("@KaiShiNianYue", DbType.String);
+                        insCmd.Parameters.Add("@JieShuNianYue", DbType.String);
+                        insCmd.Parameters.Add("@JianLiNeiRong", DbType.String);
+
+                        foreach (var item in items)
+                        {
+                            insCmd.Parameters["@ShenFenZheng"].Value = shenFenZheng ?? "";
+                            insCmd.Parameters["@PaiXuId"].Value = item.PaiXuId;
+                            insCmd.Parameters["@KaiShiNianYue"].Value = item.StartDate;   // 已格式化或空字符串
+                            insCmd.Parameters["@JieShuNianYue"].Value = item.EndDate;     // 已格式化或空字符串
+                            insCmd.Parameters["@JianLiNeiRong"].Value = item.Content ?? "";
+                            insCmd.ExecuteNonQuery();
+                        }
+                    }
+
+                    tran.Commit();
+                    MSG.WriteLine($"身份证 {shenFenZheng} 的简历已更新，共 {items.Count} 条。");
+                }
+                catch (Exception ex)
+                {
+                    tran.Rollback();
+                    MSG.WriteLine($"导入简历失败，已回滚事务。错误信息: {ex.Message}");
+                }
+            }
+        }
+
 
 
 
@@ -475,7 +535,11 @@ namespace DLCA
                 this.UpsertKslist(dto);
 
                 // 4. 插入或更新 ksjiating
-                this.UpsertKsJiating(dto.ShenFenZheng, dto.JiaTingChengYuanJson); 
+                this.UpsertKsJiating(dto.ShenFenZheng, dto.JiaTingChengYuanJson);
+
+                // 简历解析并入库（保持输入顺序，空行跳过，PaiXuId从1递增）
+                this.UpsertKsJianLi(dto.ShenFenZheng, dto.JianLi);
+
 
                 MSG.WriteLine($"成功导入或更新记录：{dto.XingMing} ({dto.ShenFenZheng})");
             }
@@ -589,6 +653,75 @@ namespace DLCA
         }
     }
 
+
+
+
+
+    public class JianLiItem
+    {
+        public int PaiXuId { get; set; }
+        public string StartDate { get; set; } = "";
+        public string EndDate { get; set; } = "";
+        public string Content { get; set; } = "";
+    }
+
+    public static class JianLiParser
+    {
+        // 兼容所有分隔符：--、—、→、至、到、~、---- 等
+        private static readonly Regex LineRegex = new Regex(
+            @"^(?<start>[\d年月日./\-]+?)\s*[-—~→至到]+\s*(?<end>[\d年月日./\-]*)\s+(?<content>.+)$",
+            RegexOptions.Compiled);
+
+        public static List<JianLiItem> Parse(string input)
+        {
+            var list = new List<JianLiItem>();
+            if (string.IsNullOrWhiteSpace(input)) return list;
+
+            var lines = input.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+
+            int index = 1;
+
+            foreach (var raw in lines)
+            {
+                string line = raw.Trim();
+                if (line == "") continue; // 跳过空行
+
+                var m = LineRegex.Match(line);
+                if (!m.Success)
+                {
+                    // 格式不匹配，作为纯内容处理
+                    list.Add(new JianLiItem
+                    {
+                        PaiXuId = index++,
+                        StartDate = "",
+                        EndDate = "",
+                        Content = line
+                    });
+                    continue;
+                }
+
+                string start = DateNormalizer.NormalizeChuShengNianYue(m.Groups["start"].Value);
+                string end = DateNormalizer.NormalizeChuShengNianYue(m.Groups["end"].Value);
+                string content = m.Groups["content"].Value.Trim();
+
+                list.Add(new JianLiItem
+                {
+                    PaiXuId = index++,
+                    StartDate = start,
+                    EndDate = end,
+                    Content = content
+                });
+            }
+
+            return list;
+        }
+    }
+
+
+
+
+
+    //================================================================================// 
 
 
     public interface IDbHelpers
