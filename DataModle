@@ -451,6 +451,7 @@ namespace DLCA
         }
 
 
+
         // 更新或添加简历条目//
         public void UpsertKsJianLi(string shenFenZheng, string jianliText)
         {
@@ -462,6 +463,13 @@ namespace DLCA
 
             var items = NewJianLiParser.Parse(jianliText ?? "");
 
+            // 确保解析项按顺序有正确的 PaiXuId（从1开始）
+            for (int i = 0; i < items.Count; i++)
+            {
+                items[i].PaiXuId = i + 1;
+            }
+
+            const int totalCount = 10; // 每人固定 10 条
             using (var tran = Connection.BeginTransaction())
             {
                 try
@@ -483,33 +491,54 @@ namespace DLCA
                             );
                         ", Connection, tran))
                     {
+                        // 保持你原来的参数定义方式
                         insCmd.Parameters.Add("@ShenFenZheng", DbType.String);
                         insCmd.Parameters.Add("@PaiXuId", DbType.Int32);
                         insCmd.Parameters.Add("@QiShiShiJian_NianYue", DbType.String);
                         insCmd.Parameters.Add("@JieShuShiJian_NianYue", DbType.String);
                         insCmd.Parameters.Add("@JianLiNeiRong", DbType.String);
 
+                        // 插入解析到的真实条目
                         foreach (var item in items)
                         {
                             insCmd.Parameters["@ShenFenZheng"].Value = shenFenZheng ?? "";
                             insCmd.Parameters["@PaiXuId"].Value = item.PaiXuId;
-                            insCmd.Parameters["@QiShiShiJian_NianYue"].Value = item.StartDate;   // 已格式化或空字符串
-                            insCmd.Parameters["@JieShuShiJian_NianYue"].Value = item.EndDate;     // 已格式化或空字符串
+                            insCmd.Parameters["@QiShiShiJian_NianYue"].Value = string.IsNullOrWhiteSpace(item.StartDate) ? "" : item.StartDate;
+                            insCmd.Parameters["@JieShuShiJian_NianYue"].Value = string.IsNullOrWhiteSpace(item.EndDate) ? "" : item.EndDate;
                             insCmd.Parameters["@JianLiNeiRong"].Value = item.Content ?? "";
                             insCmd.ExecuteNonQuery();
+                        }
+
+                        // 3. 若不足 10 条，补足占位记录（只填证件号和 PaiXuId，其他字段为空字符串）
+                        int currentCount = items.Count;
+                        if (currentCount < totalCount)
+                        {
+                            for (int i = currentCount + 1; i <= totalCount; i++)
+                            {
+                                insCmd.Parameters["@ShenFenZheng"].Value = shenFenZheng ?? "";
+                                insCmd.Parameters["@PaiXuId"].Value = i;
+                                insCmd.Parameters["@QiShiShiJian_NianYue"].Value = "";
+                                insCmd.Parameters["@JieShuShiJian_NianYue"].Value = "";
+                                insCmd.Parameters["@JianLiNeiRong"].Value = "";
+                                insCmd.ExecuteNonQuery();
+                            }
                         }
                     }
 
                     tran.Commit();
-                    MSG.WriteLine($"身份证 {shenFenZheng} 的简历已更新，共 {items.Count} 条。");
+
+                    int actual = items.Count;
+                    int filled = Math.Max(0, totalCount - actual);
+                    MSG.WriteLine($"身份证 {shenFenZheng} 的简历已更新，共 {totalCount} 条（实际 {actual} 条，补齐 {filled} 条）。");
                 }
                 catch (Exception ex)
                 {
-                    tran.Rollback();
+                    try { tran.Rollback(); } catch { }
                     MSG.WriteLine($"导入简历失败，已回滚事务。错误信息: {ex.Message}");
                 }
             }
         }
+
 
 
 
