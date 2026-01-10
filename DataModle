@@ -460,7 +460,7 @@ namespace DLCA
                 return;
             }
 
-            var items = JianLiParser.Parse(jianliText ?? "");
+            var items = NewJianLiParser.Parse(jianliText ?? "");
 
             using (var tran = Connection.BeginTransaction())
             {
@@ -665,12 +665,92 @@ namespace DLCA
         public string Content { get; set; } = "";
     }
 
-    public static class JianLiParser
+    public static class NewJianLiParser
     {
-        // 兼容所有分隔符：--、—、→、至、到、~、---- 等
-        private static readonly Regex LineRegex = new Regex(
-            @"^(?<start>[\d年月日./\-]+?)\s*[-—~→至到]+\s*(?<end>[\d年月日./\-]*)\s+(?<content>.+)$",
-            RegexOptions.Compiled);
+        private static readonly Regex[] DatePatterns = new[]
+        {
+        new Regex(@"\b(?<y>\d{4})[ \-./](?<m>\d{1,2})[ \-./](?<d>\d{1,2})\b", RegexOptions.Compiled),
+        new Regex(@"\b(?<y>\d{4})[ \-./](?<m>\d{1,2})\b", RegexOptions.Compiled),
+        new Regex(@"\b(?<y2>\d{2})[.](?<m>\d{1,2})[.](?<d>\d{1,2})\b", RegexOptions.Compiled),
+        new Regex(@"\b(?<y>\d{4})年\s*(?<m>\d{1,2})月(?:\s*(?<d>\d{1,2})日?)?\b", RegexOptions.Compiled),
+        new Regex(@"\b(?<y>\d{4})[.\/\-](?<m>\d{1,2})\b", RegexOptions.Compiled),
+        new Regex(@"\b(?<m>\d{1,2})[.\/\-](?<d>\d{1,2})\b", RegexOptions.Compiled)
+    };
+
+        private static readonly Regex SepRegex = new Regex(@"(--+|—+|至|到|~|(?<!\d)-(?!\d))", RegexOptions.Compiled);
+
+        // TryParseLine: 增强后支持只有 start、start+sep(无end)、以及 start+content（无sep无end）
+        private static bool TryParseLine(string line, out string start, out string end, out string content)
+        {
+            start = end = content = "";
+
+            // 1) 找第一个日期 token（最左）
+            var first = FindFirstDate(line);
+            if (first == null) return false;
+            start = first.Value.Text;
+            int posAfterStart = first.Value.Index + first.Value.Length;
+
+            // 2) 优先寻找显式分隔符（限制距离，避免误判）
+            var sepMatch = SepRegex.Match(line, posAfterStart);
+            if (sepMatch.Success && sepMatch.Index - posAfterStart <= 40)
+            {
+                int posAfterSep = sepMatch.Index + sepMatch.Length;
+                // 在分隔符之后寻找第二个日期
+                var second = FindFirstDate(line, posAfterSep);
+                if (second != null)
+                {
+                    // 正常 start -- end ... 的情况
+                    end = second.Value.Text;
+                    int posAfterEnd = second.Value.Index + second.Value.Length;
+                    content = line.Substring(posAfterEnd).Trim();
+                    if (string.IsNullOrEmpty(content)) content = "";
+                    return true;
+                }
+                else
+                {
+                    // 分隔符存在但没有第二个日期：允许视为“至今”情况
+                    // 内容为分隔符之后的剩余文本（可能为空）
+                    content = line.Substring(posAfterSep).Trim();
+                    // 即便 content 为空，也允许（表示 start 到现在且无描述）
+                    end = "";
+                    return true;
+                }
+            }
+
+            // 3) 没有显式分隔符，尝试空格分隔的两个日期（两个日期之间仅有空白或少量连字符）
+            var secondAlt = FindFirstDate(line, posAfterStart);
+            if (secondAlt != null)
+            {
+                int betweenLen = secondAlt.Value.Index - posAfterStart;
+                if (betweenLen >= 0 && betweenLen <= 12)
+                {
+                    string between = line.Substring(posAfterStart, betweenLen);
+                    if (Regex.IsMatch(between, @"^[\s\-–—]{1,12}$"))
+                    {
+                        end = secondAlt.Value.Text;
+                        int posAfterEnd = secondAlt.Value.Index + secondAlt.Value.Length;
+                        content = line.Substring(posAfterEnd).Trim();
+                        if (string.IsNullOrEmpty(content)) content = "";
+                        return true;
+                    }
+                }
+            }
+
+            // 4) 没有第二个日期，也没有显式分隔符：如果第一个日期后直接是内容（允许若干空白），则视为只有开始日期
+            //    例如: "2009.11    华师大公共管理研究院..."
+            var restAfterStart = line.Substring(posAfterStart).Trim();
+            if (!string.IsNullOrEmpty(restAfterStart))
+            {
+                // 但要避免把非常短的尾部误判为内容（可根据需要调整阈值）
+                // 这里认为只要第一个日期后有非空文本，就把它当作 content（且 end 为空）
+                end = "";
+                content = restAfterStart;
+                return true;
+            }
+
+            // 5) 兜底失败
+            return false;
+        }
 
         public static List<JianLiItem> Parse(string input)
         {
@@ -678,42 +758,130 @@ namespace DLCA
             if (string.IsNullOrWhiteSpace(input)) return list;
 
             var lines = input.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-
-            int index = 1;
-
+            int idx = 1;
             foreach (var raw in lines)
             {
-                string line = raw.Trim();
-                if (line == "") continue; // 跳过空行
+                var line = raw.Trim();
+                if (string.IsNullOrEmpty(line)) continue;
 
-                var m = LineRegex.Match(line);
-                if (!m.Success)
+                if (TryParseLine(line, out string sRaw, out string eRaw, out string cont))
                 {
-                    // 格式不匹配，作为纯内容处理
                     list.Add(new JianLiItem
                     {
-                        PaiXuId = index++,
+                        PaiXuId = idx++,
+                        StartDate = NormalizeDate(sRaw),
+                        EndDate = string.IsNullOrWhiteSpace(eRaw) ? "" : NormalizeDate(eRaw),
+                        Content = cont.Trim()
+                    });
+                }
+                else
+                {
+                    list.Add(new JianLiItem
+                    {
+                        PaiXuId = idx++,
                         StartDate = "",
                         EndDate = "",
                         Content = line
                     });
-                    continue;
                 }
-
-                string start = DateNormalizer.NormalizeChuShengNianYue(m.Groups["start"].Value);
-                string end = DateNormalizer.NormalizeChuShengNianYue(m.Groups["end"].Value);
-                string content = m.Groups["content"].Value.Trim();
-
-                list.Add(new JianLiItem
-                {
-                    PaiXuId = index++,
-                    StartDate = start,
-                    EndDate = end,
-                    Content = content
-                });
             }
 
             return list;
+        }
+
+        private static (string Text, int Index, int Length)? FindFirstDate(string text, int startAt = 0)
+        {
+            int bestIndex = int.MaxValue;
+            string bestText = null;
+            int bestLen = 0;
+
+            for (int i = 0; i < DatePatterns.Length; i++)
+            {
+                var m = DatePatterns[i].Match(text, startAt);
+                if (m.Success)
+                {
+                    if (m.Index < bestIndex)
+                    {
+                        bestIndex = m.Index;
+                        bestText = m.Value;
+                        bestLen = m.Length;
+                    }
+                }
+            }
+
+            if (bestText == null) return null;
+            return (bestText, bestIndex, bestLen);
+        }
+
+        // NormalizeDate 与 MapTwoDigitYear、SafeFormat 保持之前实现（略）
+        private static string NormalizeDate(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return "";
+
+            raw = raw.Trim();
+            var m = Regex.Match(raw, @"^(?<y>\d{4})年\s*(?<m>\d{1,2})月(?:\s*(?<d>\d{1,2})日?)?$");
+            if (m.Success)
+            {
+                int y = int.Parse(m.Groups["y"].Value);
+                int mm = int.Parse(m.Groups["m"].Value);
+                int dd = m.Groups["d"].Success ? int.Parse(m.Groups["d"].Value) : 1;
+                return SafeFormat(y, mm, dd);
+            }
+
+            m = Regex.Match(raw, @"^(?<y>\d{4})[ \-./](?<m>\d{1,2})(?:[ \-./](?<d>\d{1,2}))?$");
+            if (m.Success)
+            {
+                int y = int.Parse(m.Groups["y"].Value);
+                int mm = int.Parse(m.Groups["m"].Value);
+                int dd = m.Groups["d"].Success ? int.Parse(m.Groups["d"].Value) : 1;
+                return SafeFormat(y, mm, dd);
+            }
+
+            m = Regex.Match(raw, @"^(?<y2>\d{2})[.](?<m>\d{1,2})[.](?<d>\d{1,2})$");
+            if (m.Success)
+            {
+                int y2 = int.Parse(m.Groups["y2"].Value);
+                int y = MapTwoDigitYear(y2);
+                int mm = int.Parse(m.Groups["m"].Value);
+                int dd = int.Parse(m.Groups["d"].Value);
+                return SafeFormat(y, mm, dd);
+            }
+
+            m = Regex.Match(raw, @"^(?<y>\d{4})[.\/\-](?<m>\d{1,2})$");
+            if (m.Success)
+            {
+                int y = int.Parse(m.Groups["y"].Value);
+                int mm = int.Parse(m.Groups["m"].Value);
+                return SafeFormat(y, mm, 1);
+            }
+
+            if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            {
+                return dt.ToString("yyyy-MM-dd");
+            }
+
+            return raw;
+        }
+
+        private static int MapTwoDigitYear(int y2)
+        {
+            if (y2 >= 0 && y2 <= 29) return 2000 + y2;
+            return 1900 + y2;
+        }
+
+        private static string SafeFormat(int y, int m, int d)
+        {
+            try
+            {
+                int daysInMonth = DateTime.DaysInMonth(y, Math.Max(1, Math.Min(12, m)));
+                int dd = Math.Max(1, Math.Min(daysInMonth, d));
+                var dt = new DateTime(y, Math.Max(1, Math.Min(12, m)), dd);
+                return dt.ToString("yyyy-MM-dd");
+            }
+            catch
+            {
+                return $"{y:0000}-{m:00}-{d:00}";
+            }
         }
     }
 
