@@ -476,25 +476,25 @@ namespace DLCA
                     // 2. 插入新记录（保持输入顺序，PaiXuId从1递增）
                     using (var insCmd = new SQLiteCommand(@"
                             INSERT INTO ksjianli (
-                                ShenFenZheng, PaiXuId, KaiShiNianYue, JieShuNianYue, JianLiNeiRong
+                                ShenFenZheng, PaiXuId, QiShiShiJian_NianYue, JieShuShiJian_NianYue, JianLiNeiRong
                             )
                             VALUES (
-                                @ShenFenZheng, @PaiXuId, @KaiShiNianYue, @JieShuNianYue, @JianLiNeiRong
+                                @ShenFenZheng, @PaiXuId, @QiShiShiJian_NianYue, @JieShuShiJian_NianYue, @JianLiNeiRong
                             );
                         ", Connection, tran))
                     {
                         insCmd.Parameters.Add("@ShenFenZheng", DbType.String);
                         insCmd.Parameters.Add("@PaiXuId", DbType.Int32);
-                        insCmd.Parameters.Add("@KaiShiNianYue", DbType.String);
-                        insCmd.Parameters.Add("@JieShuNianYue", DbType.String);
+                        insCmd.Parameters.Add("@QiShiShiJian_NianYue", DbType.String);
+                        insCmd.Parameters.Add("@JieShuShiJian_NianYue", DbType.String);
                         insCmd.Parameters.Add("@JianLiNeiRong", DbType.String);
 
                         foreach (var item in items)
                         {
                             insCmd.Parameters["@ShenFenZheng"].Value = shenFenZheng ?? "";
                             insCmd.Parameters["@PaiXuId"].Value = item.PaiXuId;
-                            insCmd.Parameters["@KaiShiNianYue"].Value = item.StartDate;   // 已格式化或空字符串
-                            insCmd.Parameters["@JieShuNianYue"].Value = item.EndDate;     // 已格式化或空字符串
+                            insCmd.Parameters["@QiShiShiJian_NianYue"].Value = item.StartDate;   // 已格式化或空字符串
+                            insCmd.Parameters["@JieShuShiJian_NianYue"].Value = item.EndDate;     // 已格式化或空字符串
                             insCmd.Parameters["@JianLiNeiRong"].Value = item.Content ?? "";
                             insCmd.ExecuteNonQuery();
                         }
