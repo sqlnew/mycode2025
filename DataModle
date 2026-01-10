@@ -313,12 +313,15 @@ namespace DLCA
             cmd.Parameters.AddWithValue("@ShenFenZheng", p.ShenFenZheng ?? "");
             cmd.Parameters.AddWithValue("@XingMing", p.XingMing ?? "");
             cmd.Parameters.AddWithValue("@XingBie", p.XingBie ?? "");
-            cmd.Parameters.AddWithValue("@ChuShengNianYue", p.ChuShengNianYue ?? "");
+
+            // 日期字段统一格式化
+            cmd.Parameters.AddWithValue("@ChuShengNianYue", DateNormalizer.NormalizeChuShengNianYue(p.ChuShengNianYue));
+            cmd.Parameters.AddWithValue("@RuDangShiJian", DateNormalizer.NormalizeChuShengNianYue(p.RuDangShiJian));
+            cmd.Parameters.AddWithValue("@CanJiaGongZuoShiJian", DateNormalizer.NormalizeChuShengNianYue(p.CanJiaGongZuoShiJian));
+
             cmd.Parameters.AddWithValue("@MinZu", p.MinZu ?? "");
             cmd.Parameters.AddWithValue("@JiGuan", p.JiGuan ?? "");
             cmd.Parameters.AddWithValue("@ChuShengDi", p.ChuShengDi ?? "");
-            cmd.Parameters.AddWithValue("@RuDangShiJian", p.RuDangShiJian ?? "");
-            cmd.Parameters.AddWithValue("@CanJiaGongZuoShiJian", p.CanJiaGongZuoShiJian ?? "");
             cmd.Parameters.AddWithValue("@JianKangZhuangKuang", p.JianKangZhuangKuang ?? "");
             cmd.Parameters.AddWithValue("@ZhuanYeJiShuZhiWu", p.ZhuanYeJiShuZhiWu ?? "");
             cmd.Parameters.AddWithValue("@ShuXiZhuanYeYouHeZhuanChang", p.ShuXiZhuanYeYouHeZhuanChang ?? "");
@@ -409,7 +412,8 @@ namespace DLCA
                             insCmd.Parameters["@PaiXuId"].Value = index;
                             insCmd.Parameters["@ChengWei"].Value = (string?)item["ChengWei"] ?? "";
                             insCmd.Parameters["@XingMing"].Value = (string?)item["XingMing"] ?? "";
-                            insCmd.Parameters["@ChuShengRiQi"].Value = (string?)item["ChuShengRiQi"] ?? "";
+                            insCmd.Parameters["@ChuShengRiQi"].Value = DateNormalizer.NormalizeChuShengNianYue((string?)item["ChuShengRiQi"]);
+
                             insCmd.Parameters["@ZhengZhiMianMao"].Value = (string?)item["ZhengZhiMianMao"] ?? "";
                             insCmd.Parameters["@GongZuoDanWeiJiZhiWu"].Value = (string?)item["GongZuoDanWeiJiZhiWu"] ?? "";
                             insCmd.ExecuteNonQuery();
