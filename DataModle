@@ -469,7 +469,7 @@ namespace DLCA
                 items[i].PaiXuId = i + 1;
             }
 
-            const int totalCount = 10; // 每人固定 10 条
+            const int totalCount = 15; // 每人固定 15 条
             using (var tran = Connection.BeginTransaction())
             {
                 try
