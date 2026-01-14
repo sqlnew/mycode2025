@@ -30,6 +30,14 @@ using System.Xml.Linq;
 namespace DLCA
 {
 
+    //本地数据提交信息类//
+    public class PostLocalDataClass
+    {
+        public string random21 { get; set; } = "";
+        public string DanWeiMingCheng { get; set; } = "";
+        public string DangPaiMingCheng { get; set; } = "";
+    }
+
 
     public class PersonDto
     {
@@ -73,6 +81,10 @@ namespace DLCA
         public string ShenFenZheng { get; set; } = "";
         public string ZhaoPianBase64 { get; set; } = "";
         public string Version { get; set; } = "";
+
+        // 其他字段可根据需要添加//
+        public string DanWeiMingCheng { get; set; } = "";
+        public string DangPaiMingCheng { get; set; } = "";
     }
 
 
@@ -257,7 +269,7 @@ namespace DLCA
                       ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi, XianRenZhiWu, NiRenZhiWu, NiMianZhiWu,
                       JianLi, JiangChengQingKuang, NianDuKaoHeJieGuo, RenMianLiYou, JiaTingChengYuan,
                       ChengBaoDanWei, JiSuanNianLingShiJian, TianBiaoShiJian, TianBiaoRen,
-                      ZhaoPian, Version, NianLing, XiuGaiShiJian, ChuangJianShiJian
+                      ZhaoPian, Version, NianLing, XiuGaiShiJian, ChuangJianShiJian, DanWeiMingCheng, DangPaiMingCheng
                     ) VALUES (
                       @ShenFenZheng, @XingMing, @XingBie, @ChuShengNianYue, @MinZu, @JiGuan, @ChuShengDi,
                       @RuDangShiJian, @CanJiaGongZuoShiJian, @JianKangZhuangKuang, @ZhuanYeJiShuZhiWu,
@@ -267,7 +279,7 @@ namespace DLCA
                       @ZaiZhiJiaoYu_XueWei_BiYeYuanXiaoXi, @XianRenZhiWu, @NiRenZhiWu, @NiMianZhiWu,
                       @JianLi, @JiangChengQingKuang, @NianDuKaoHeJieGuo, @RenMianLiYou, @JiaTingChengYuan,
                       @ChengBaoDanWei, @JiSuanNianLingShiJian, @TianBiaoShiJian, @TianBiaoRen,
-                      @ZhaoPian, @Version, @NianLing, @XiuGaiShiJian, @ChuangJianShiJian
+                      @ZhaoPian, @Version, @NianLing, @XiuGaiShiJian, @ChuangJianShiJian, @DanWeiMingCheng, @DangPaiMingCheng
                     );";
                     FillCommonParameters(cmd, p, photoBytes, now, now);
                     cmd.ExecuteNonQuery();
@@ -299,7 +311,8 @@ namespace DLCA
                       JiaTingChengYuan=@JiaTingChengYuan, ChengBaoDanWei=@ChengBaoDanWei,
                       JiSuanNianLingShiJian=@JiSuanNianLingShiJian, TianBiaoShiJian=@TianBiaoShiJian,
                       TianBiaoRen=@TianBiaoRen, ZhaoPian=@ZhaoPian, Version=@Version,
-                      NianLing=@NianLing, XiuGaiShiJian=@XiuGaiShiJian
+                      NianLing=@NianLing, XiuGaiShiJian=@XiuGaiShiJian,
+                      DanWeiMingCheng=@DanWeiMingCheng, DangPaiMingCheng=@DangPaiMingCheng
                     WHERE ShenFenZheng=@ShenFenZheng;";
                     FillCommonParameters(cmd, p, photoBytes, now, null);
                     cmd.Parameters.AddWithValue("@ShenFenZheng", p.ShenFenZheng ?? "");
@@ -358,6 +371,9 @@ namespace DLCA
             cmd.Parameters.AddWithValue("@XiuGaiShiJian", xiuGai);
             if (chuangJian != null)
                 cmd.Parameters.AddWithValue("@ChuangJianShiJian", chuangJian);
+
+            cmd.Parameters.AddWithValue("@DanWeiMingCheng", p.DanWeiMingCheng ?? "");
+            cmd.Parameters.AddWithValue("@DangPaiMingCheng", p.DangPaiMingCheng ?? "");
         }
 
 
@@ -509,7 +525,7 @@ namespace DLCA
                             insCmd.ExecuteNonQuery();
                         }
 
-                        // 3. 若不足 10 条，补足占位记录（只填证件号和 PaiXuId，其他字段为空字符串）
+                        // 3. 若不足 15 条，补足占位记录（只填证件号和 PaiXuId，其他字段为空字符串）
                         int currentCount = items.Count;
                         if (currentCount < totalCount)
                         {
@@ -545,7 +561,7 @@ namespace DLCA
 
 
 
-        public void ImportXmlFileToDwDb(string xmlPath)
+        public void ImportXmlFileToDwDb(string xmlPath, PostLocalDataClass LocalDataObj = null)
         {
             try
             {
@@ -559,6 +575,11 @@ namespace DLCA
                     MSG.WriteLine($"导入失败：XML 文件 {fileName} 中身份证号缺失或为空，已跳过。");
                     return;
                 }
+
+                PostLocalDataClass TemLocalDataObj = LocalDataObj ?? new PostLocalDataClass();
+                dto.DangPaiMingCheng = TemLocalDataObj.DangPaiMingCheng;
+                dto.DanWeiMingCheng = TemLocalDataObj.DanWeiMingCheng;
+                TemLocalDataObj = null;
 
                 // 3. 插入或更新 kslist（直接用当前实例）
                 this.UpsertKslist(dto);
