@@ -46,7 +46,9 @@ namespace DLCA
             public string token { get; set; } = "";
             public string cmd { get; set; } = "";
             public dynamic data { get; set; }
+            public dynamic other { get; set; }
         }
+
 
 
 
@@ -166,6 +168,24 @@ namespace DLCA
                         return;
                     }
 
+                    PostLocalDataClass TemPostLocalData;
+                    try
+                    {
+                        TemPostLocalData = JsonConvert.DeserializeObject<PostLocalDataClass>(TemQuery.other);
+                    }
+                    catch (Exception E)
+                    {
+                        TemPostLocalData = null;
+                    }
+                    if (TemPostLocalData == null)
+                    {
+                        OutJson = "解码提交本地数据不成功";
+                        return;
+                    }
+                    //MSG.WriteLine($@"单位: {TemPostLocalData.DanWeiMingCheng}");
+                    //MSG.WriteLine($@"党派: {TemPostLocalData.DangPaiMingCheng}");
+
+
                     List<string> filesToImport = new List<string>();
 
                     // 判断是否为目录
@@ -214,7 +234,7 @@ namespace DLCA
                         {
                             try
                             {
-                                Program.GlobalData.ImportXmlFileToDwDb(file);
+                                Program.GlobalData.ImportXmlFileToDwDb(file, TemPostLocalData);
                                 string fileName = System.IO.Path.GetFileName(file);
                                 MSG.WriteLine($"成功导入文件: {fileName}\r\n");
                             }
