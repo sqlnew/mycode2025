@@ -1,0 +1,140 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Microsoft.AspNetCore.Mvc.ApplicationParts;
+using Microsoft.CodeAnalysis;
+using Microsoft.Extensions.Options;
+using System.IO.Compression;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.PortableExecutable;
+using System.Threading;
+
+namespace Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation;
+
+internal class RazorReferenceManager
+{
+    private readonly ApplicationPartManager _partManager;
+    private readonly MvcRazorRuntimeCompilationOptions _options;
+    private object _compilationReferencesLock = new object();
+    private bool _compilationReferencesInitialized;
+    private IReadOnlyList<MetadataReference>? _compilationReferences;
+
+    public RazorReferenceManager(
+        ApplicationPartManager partManager,
+        IOptions<MvcRazorRuntimeCompilationOptions> options)
+    {
+        _partManager = partManager;
+        _options = options.Value;
+    }
+
+    public virtual IReadOnlyList<MetadataReference> CompilationReferences
+    {
+        get
+        {
+            return LazyInitializer.EnsureInitialized(
+                ref _compilationReferences,
+                ref _compilationReferencesInitialized,
+                ref _compilationReferencesLock,
+                GetCompilationReferences)!;
+        }
+    }
+
+    private IReadOnlyList<MetadataReference> GetCompilationReferences()
+    {
+        var metadataReferenceList = new List<MetadataReference>();
+
+        // 先尝试从嵌入资源读取 libs.zip
+        int temlen = 0;
+        try
+        {
+            var assembly = Assembly.GetEntryAssembly() ?? typeof(RazorReferenceManager).Assembly;
+            string? resourceName = assembly.GetManifestResourceNames()
+                                           .FirstOrDefault(n => n.EndsWith("libs.zip", StringComparison.OrdinalIgnoreCase));
+
+            if (resourceName != null)
+            {
+                Console.WriteLine("尝试从嵌入资源加载 libs.zip");
+                using (var zipStream = assembly.GetManifestResourceStream(resourceName))
+                using (var archive = new ZipArchive(zipStream!, ZipArchiveMode.Read))
+                {
+                    foreach (var entry in archive.Entries)
+                    {
+                        if (entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                        {
+                            //Console.WriteLine($"加载 {entry.FullName} 来自嵌入 zip");
+                            using (var dllStream = entry.Open())
+                            {
+                                metadataReferenceList.Add(CreateMetadataReferenceFromStream(dllStream, entry.FullName));
+                                temlen++;
+                            }
+                        }
+                    }
+                }
+                Console.WriteLine($@"共加载 {temlen} 个文件.");
+                return metadataReferenceList;
+            }
+            else
+            {
+                Console.WriteLine("未找到嵌入资源 libs.zip，尝试从当前路径加载");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"嵌入资源读取失败: {ex.Message}，尝试从当前路径加载");
+        }
+
+        // 如果嵌入资源不存在或读取失败，则尝试从当前目录加载 libs.zip 文件
+        Console.WriteLine("尝试从文件中加载 libs.zip");
+        string zipPath = Path.Combine(AppContext.BaseDirectory, "libs.zip");
+        if (File.Exists(zipPath))
+        {
+            try
+            {
+                using (var zipStream = File.OpenRead(zipPath))
+                using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Read))
+                {
+                    foreach (var entry in archive.Entries)
+                    {
+                        if (entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                        {
+                            //Console.WriteLine($"加载 {entry.FullName} 来自文件系统 zip");
+                            using (var dllStream = entry.Open())
+                            {
+                                metadataReferenceList.Add(CreateMetadataReferenceFromStream(dllStream, entry.FullName));
+                                temlen++;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"文件系统 zip 读取失败: {ex.Message}");
+            }
+        }
+        else
+        {
+            Console.WriteLine("当前路径下未找到 libs.zip");
+        }
+
+        Console.WriteLine($@"共加载 {temlen} 个文件.");
+
+        return metadataReferenceList;
+    }
+
+    private static MetadataReference CreateMetadataReferenceFromStream(Stream dllStream, string name)
+    {
+        // 必须复制到 MemoryStream，因为 ZipEntry.Open() 返回的流不支持随机访问
+        using (var ms = new MemoryStream())
+        {
+            dllStream.CopyTo(ms);
+            ms.Position = 0;
+
+            var moduleMetadata = ModuleMetadata.CreateFromStream(ms, PEStreamOptions.PrefetchMetadata);
+            var assemblyMetadata = AssemblyMetadata.Create(moduleMetadata);
+
+            return assemblyMetadata.GetReference(filePath: name);
+        }
+    }
+}
