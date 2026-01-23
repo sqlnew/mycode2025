@@ -1,0 +1,219 @@
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using System.Web;
+using GleamTech.Reflection;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+
+namespace GleamTech.AspNet.Core;
+
+public static class WebActivationMiddlewareExtensions
+{
+    [Serializable]
+    [CompilerGenerated]
+    private sealed class _vC
+    {
+        public static readonly _vC _003C_003E9 = new _vC();
+
+        public static Action<SessionOptions> _003C_003E9__0_0;
+
+        internal void _lJ(SessionOptions options)
+        {
+            CookieBuilder cookie = options.Cookie;
+            if (GleamTechWebConfiguration.Current.CookieSameSiteFixEnabled)
+            {
+                cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.None;
+                cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            }
+
+            cookie.IsEssential = true;
+        }
+    }
+
+    [CompilerGenerated]
+    private sealed class _fK
+    {
+        public IHttpContextAccessor _aT;
+
+        public IConfiguration _Np;
+
+        internal IHttpContext _Lv()
+        {
+            return new AspNetCoreContext(_aT.HttpContext);
+        }
+
+        internal string _mH(string key)
+        {
+            return _Np[key];
+        }
+    }
+
+    //
+    // 摘要:
+    //     Add GleamTech to the ASP.NET Core services container. Adds required services
+    //     by GleamTech to the specified Microsoft.Extensions.DependencyInjection.IServiceCollection.
+    //
+    //
+    //     services.AddGleamTech calls services.AddDistributedMemoryCache and services.AddSession
+    //     internally and if you need to set a custom cache like services.AddStackExchangeRedisCache
+    //     or need to call services.AddSession with custom options then place them before
+    //     services.AddGleamTech so that they become effective.
+    //
+    // 参数:
+    //   services:
+    //     The Microsoft.Extensions.DependencyInjection.IServiceCollection to add services
+    //     to.
+    //
+    // 返回结果:
+    //     A reference to this instance after the operation has completed.
+    public static IServiceCollection AddGleamTech(this IServiceCollection services)
+    {
+        GleamTechConfiguration.EnsureAssemblies();
+        return services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>().AddDistributedMemoryCache().AddSession(delegate (SessionOptions options)
+        {
+            CookieBuilder cookie = options.Cookie;
+            if (GleamTechWebConfiguration.Current.CookieSameSiteFixEnabled)
+            {
+                cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.None;
+                cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            }
+
+            cookie.IsEssential = true;
+        });
+    }
+
+    //
+    // 摘要:
+    //     Register GleamTech to the ASP.NET Core HTTP request pipeline. Adds required middlewares
+    //     by GleamTech to the specified Microsoft.AspNetCore.Builder.IApplicationBuilder.
+    //
+    //
+    //     The order of app.UseXXX methods is important so app.UseGleamTech should be placed
+    //     before app.UseStaticFiles, app.UseRouting and app.UseEndpoints (or before app.UseMvc
+    //     for legacy ASP.NET Core 2.1).
+    //
+    // 参数:
+    //   builder:
+    //     The Microsoft.AspNetCore.Builder.IApplicationBuilder to add the middlewares to.
+    //
+    //
+    //   configure:
+    //     An System.Action to configure the GleamTech products.
+    //     Properties of [Product]Configuration.Current and especially [Product]WebConfiguration.Current
+    //     should be set here.
+    //
+    // 返回结果:
+    //     A reference to this instance after the operation has completed.
+    public static IApplicationBuilder UseGleamTech(this IApplicationBuilder builder, Action configure = null)
+    {
+        IHostingEnvironment requiredService = builder.ApplicationServices.GetRequiredService<IHostingEnvironment>();
+        IHttpContextAccessor _aT = builder.ApplicationServices.GetRequiredService<IHttpContextAccessor>();
+        IConfiguration _Np = builder.ApplicationServices.GetRequiredService<IConfiguration>();
+        HostingInfo hostingInfo = new HostingInfo
+        {
+            ApplicationVirtualPath = (_Np["APPL_PATH"] ?? Environment.GetEnvironmentVariable("ASPNETCORE_APPL_PATH") ?? "/"),
+            ApplicationPhysicalPath = (requiredService.WebRootPath ?? Path.Combine(requiredService.ContentRootPath, "wwwroot")),
+            ApplicationContentPath = requiredService.ContentRootPath,
+            ApplicationBinPath = AssemblyInfo.GetCurrent().OriginalFilePath.Parent(),
+            HttpContextAccessor = () => new AspNetCoreContext(_aT.HttpContext),
+            ConfigurationAccessor = (string key) => _Np[key]
+        };
+        Hosting.Initialize(hostingInfo);
+        configure?.Invoke();
+        RunPreApplicationStartMethods();
+        if (GleamTechWebConfiguration.Current.CookielessSessionMode != CookielessSessionMode.Never)
+        {
+            builder.Use(_tv);
+        }
+
+        return builder.UseSession().UseMiddleware<WebActivationMiddleware>(new object[1] { hostingInfo });
+    }
+
+    private static async Task _tv(HttpContext context, Func<Task> next)
+    {
+        string text = _YT(context.Request);
+        if (!string.IsNullOrEmpty(text))
+        {
+            SessionOptions value = context.RequestServices.GetRequiredService<IOptions<SessionOptions>>().Value;
+            string text2 = context.Request.Headers["Cookie"];
+            if (text2 == null || text2.IndexOf(value.Cookie.Name, StringComparison.OrdinalIgnoreCase) == -1)
+            {
+                HeaderDictionaryExtensions.Append(context.Request.Headers, "Cookie", value.Cookie.Name + "=" + text);
+            }
+        }
+
+        await next();
+    }
+
+    private static string _YT(HttpRequest request)
+    {
+        string cookielessSessionParameter = GleamTechWebConfiguration.Current.CookielessSessionParameter;
+        string text = request.Headers[cookielessSessionParameter];
+        if (text != null)
+        {
+            return text;
+        }
+
+        if (request.HasFormContentType && !request.ContentType.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+        {
+            text = request.Form[cookielessSessionParameter];
+            if (text != null)
+            {
+                return text;
+            }
+        }
+
+        text = request.Query[cookielessSessionParameter];
+        if (text != null)
+        {
+            return text;
+        }
+
+        string text2 = request.Headers["Referer"];
+        if (!string.IsNullOrWhiteSpace(text2) && Uri.TryCreate(text2, UriKind.RelativeOrAbsolute, out Uri result))
+        {
+            text = HttpUtility.ParseQueryString(result.Query)[cookielessSessionParameter];
+            if (text != null)
+            {
+                return text;
+            }
+        }
+
+        return null;
+    }
+
+    public static void RunPreApplicationStartMethods()
+    {
+        List<Assembly> list = GleamTechConfiguration.EnsureAssemblies();
+        List<PreApplicationStartMethodAttribute> list2 = new List<PreApplicationStartMethodAttribute>();
+        foreach (Assembly item in list)
+        {
+            try
+            {
+                PreApplicationStartMethodAttribute[] collection = (PreApplicationStartMethodAttribute[])item.GetCustomAttributes(typeof(PreApplicationStartMethodAttribute), inherit: true);
+                list2.AddRange(collection);
+            }
+            catch
+            {
+            }
+        }
+
+        foreach (PreApplicationStartMethodAttribute item2 in list2)
+        {
+            MethodInfo method = item2.Type.GetMethod(item2.MethodName, BindingFlags.IgnoreCase | BindingFlags.Static | BindingFlags.Public, null, Type.EmptyTypes, null);
+            if (method != null)
+            {
+                method.Invoke(null, null);
+            }
+        }
+    }
+}
