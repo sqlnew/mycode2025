@@ -21,6 +21,7 @@ using System.Security.Policy;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using System.Globalization;
 
 
 
@@ -36,6 +37,19 @@ namespace DLCA
         public string random21 { get; set; } = "";
         public string DanWeiMingCheng { get; set; } = "";
         public string DangPaiMingCheng { get; set; } = "";
+    }
+
+
+    //获取退休年龄的请求参数//
+    public class RequestTuiXiuClass
+    {
+        public string random21 { get; set; } = "";
+        public string XingBie { get; set; } = "";
+        public string GanBuLeiXing { get; set; } = "";
+        public string ChuShengRiQi { get; set; } = "";
+        public string OutTuiXiuRiQi { get; set; } = "";
+        public string OutTuiXiuNianLing { get; set; } = "";
+        public string OutTuiXiuNianYue { get; set; } = "";
     }
 
 
@@ -936,6 +950,158 @@ namespace DLCA
     }
 
 
+
+
+
+    public static class DataProcedureHelper
+    {
+
+
+        /// <summary>
+        /// 计算退休日期并通过输出参数返回退休日期字符串和退休时的整数年龄（周岁）以及"X岁Y个月"字符串。
+        /// 输入 birthDateStr 格式: "yyyy-MM-dd" 或 "yyyy-MM"
+        /// 输出 retirementDateStr 格式: "yyyy-MM-dd"
+        /// 输出 retirementAge 为整数周岁
+        /// 输出 retirementAgeMonthsStr 格式: "X岁Y个月"
+        /// </summary>
+        public static void CalculateRetirementDate(
+            string gender,
+            string positionType,
+            string birthDateStr,
+            out string retirementDateStr,
+            out int retirementAge,
+            out string retirementAgeMonthsStr)
+        {
+            DateTime PolicyStart = new DateTime(2025, 1, 1);
+            // 初始化输出
+            retirementDateStr = null;
+            retirementAge = 0;
+            retirementAgeMonthsStr = null;
+
+            // 解析出生日期（精确到日），支持 yyyy-MM 或 yyyy-MM-dd
+            birthDateStr = NormalizeDateManual(birthDateStr);
+            if (!DateTime.TryParseExact(birthDateStr, "yyyy-MM-dd",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime birthDate))
+            {
+                throw new ArgumentException("出生日期格式错误，应为 yyyy-MM-dd 或 yyyy-MM，例如 1977-09-19 或 1977-09");
+            }
+
+            // 确定基准年龄、步长和最大年龄
+            int baseAge, delayStepMonths, maxAge;
+            if (string.Equals(gender, "男", StringComparison.Ordinal))
+            {
+                baseAge = 60; delayStepMonths = 4; maxAge = 63;
+            }
+            else if (string.Equals(gender, "女", StringComparison.Ordinal) &&
+                     string.Equals(positionType, "干部", StringComparison.Ordinal))
+            {
+                baseAge = 55; delayStepMonths = 4; maxAge = 58;
+            }
+            else if (string.Equals(gender, "女", StringComparison.Ordinal) &&
+                     string.Equals(positionType, "工人", StringComparison.Ordinal))
+            {
+                baseAge = 50; delayStepMonths = 2; maxAge = 55;
+            }
+            else
+            {
+                throw new ArgumentException("性别或岗位类型输入错误。女性需指定岗位类型：\"干部\" 或 \"工人\"。");
+            }
+
+            // 原退休日（保留日）
+            DateTime originalRetirement = birthDate.AddYears(baseAge);
+
+            // 若原退休日在政策实施前，直接返回原退休日及对应年龄
+            DateTime finalRetirement = originalRetirement;
+            if (originalRetirement >= PolicyStart)
+            {
+                // 计算 policyStart 到 originalRetirement 的月份差（按包含制）
+                int monthsSincePolicy = (originalRetirement.Year - PolicyStart.Year) * 12
+                                      + (originalRetirement.Month - PolicyStart.Month);
+
+                // 包含制：把退休当月也算入（多数线上计算器采用此方式）
+                monthsSincePolicy += 1;
+                if (monthsSincePolicy < 0) monthsSincePolicy = 0;
+
+                // 计算延迟周期数（向上取整），每个周期增加1个月延迟
+                int delayCycles = (int)Math.Ceiling((double)monthsSincePolicy / delayStepMonths);
+
+                // 延迟月数上限
+                int maxDelayMonths = (maxAge - baseAge) * 12;
+                int delayMonths = Math.Min(delayCycles, maxDelayMonths);
+
+                // 最终退休日
+                finalRetirement = originalRetirement.AddMonths(delayMonths);
+            }
+
+            // 计算退休时的整数年龄（周岁）
+            int age = finalRetirement.Year - birthDate.Year;
+            if (finalRetirement < birthDate.AddYears(age)) age--;
+            if (age < 0) age = 0;
+
+            // 计算退休时的 年+月（用于 "X岁Y个月"）
+            int years = finalRetirement.Year - birthDate.Year;
+            int months = finalRetirement.Month - birthDate.Month;
+            int days = finalRetirement.Day - birthDate.Day;
+
+            if (days < 0)
+            {
+                // 借一个月
+                DateTime prevMonth = finalRetirement.AddMonths(-1);
+                int daysInPrevMonth = DateTime.DaysInMonth(prevMonth.Year, prevMonth.Month);
+                days += daysInPrevMonth;
+                months -= 1;
+            }
+
+            if (months < 0)
+            {
+                months += 12;
+                years -= 1;
+            }
+
+            if (years < 0) years = 0;
+            if (months < 0) months = 0;
+
+            // 设置输出
+            retirementDateStr = finalRetirement.ToString("yyyy-MM-dd");
+            retirementAge = age;
+            retirementAgeMonthsStr = $"{years}岁{months}个月";
+        }
+
+        public static string NormalizeDateManual(string input)
+        {
+            try
+            {
+                string[] parts = input.Split('-');
+                if (parts.Length == 2)
+                {
+                    // 输入只有 年-月，自动补充日为 "01"
+                    string year = parts[0];
+                    string month = parts[1].PadLeft(2, '0');
+                    string day = "01";
+                    return $"{year}-{month}-{day}";
+                }
+                else if (parts.Length == 3)
+                {
+                    // 输入 年-月-日
+                    string year = parts[0];
+                    string month = parts[1].PadLeft(2, '0');
+                    string day = parts[2].PadLeft(2, '0');
+                    return $"{year}-{month}-{day}";
+                }
+                else
+                {
+                    // 格式不对，返回空字符串
+                    return string.Empty;
+                }
+            }
+            catch
+            {
+                // 出错时静默返回空字符串
+                return string.Empty;
+            }
+        }
+
+    }
 
 
 
