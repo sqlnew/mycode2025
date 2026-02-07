@@ -115,6 +115,57 @@ namespace DLCA
                     MSG.WriteLine(e.Message);
                 }
             }
+            //计算退休日期//
+            if (TemCmd == "localcmd_calcretiredates")
+            {
+                try
+                {
+                    string TemTuiXiuText = TemQuery.data?.ToString() ?? "";
+                    if (string.IsNullOrWhiteSpace(TemTuiXiuText))
+                    {
+                        OutJson = "";
+                        MSG.WriteLine(@"输入计算退休年龄信息为空");
+                        return;
+                    }
+                    DLCA.RequestTuiXiuClass TemTuiXiuData;
+                    try
+                    {
+                        TemTuiXiuData = JsonConvert.DeserializeObject<DLCA.RequestTuiXiuClass>(TemTuiXiuText);
+                    }
+                    catch (Exception E)
+                    {
+                        TemTuiXiuData = null;
+                        MSG.WriteLine(@"解码退休计算类型出错:"+E.Message);
+                    }
+                    if (TemTuiXiuData == null)
+                    {
+                        OutJson = "";
+                        return;
+                    }
+                    DataProcedureHelper.CalculateRetirementDate(
+                    TemTuiXiuData.XingBie,
+                    TemTuiXiuData.GanBuLeiXing,
+                    TemTuiXiuData.ChuShengRiQi,
+                    out string OutTuiXiuRiQi,
+                    out int OutTuiXiuNianLing,
+                    out string OutTuiXiuNianYue);
+                    TemTuiXiuData.OutTuiXiuRiQi = OutTuiXiuRiQi;
+                    TemTuiXiuData.OutTuiXiuNianLing = OutTuiXiuNianLing.ToString();
+                    TemTuiXiuData.OutTuiXiuNianYue = OutTuiXiuNianYue;
+                    OutJson = JsonConvert.SerializeObject(TemTuiXiuData, Formatting.Indented);
+                }
+                catch (Exception ex)
+                {
+                    OutJson = "";
+                    MSG.WriteLine($"计算退休日期失败: {ex.Message}");
+                }
+            }
+            //批量更新退休年龄//
+            if (TemCmd == "localcmd_batch_updatetuixiu")
+            {
+                OutJson = "";
+                Program.GlobalData.UpdateAllRetirementInfo(ref OutJson);
+            }
             //导入单个xml文件//
             if (TemCmd == "localcmd_importxml_onefile")
             {
