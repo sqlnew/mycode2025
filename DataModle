@@ -1337,7 +1337,7 @@ namespace DLCA
             retirementAge = age;
             retirementAgeMonthsStr = $"{years}岁{months}个月";
             if(months<=0){
-                retirementAgeMonthsStr = $"{years}岁;
+                retirementAgeMonthsStr = $"{years}岁";
             }
         }
 
