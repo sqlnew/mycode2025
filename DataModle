@@ -1,3 +1,6 @@
+using Aspose.Words;
+using Aspose.Words.Drawing;
+using Aspose.Words.Replacing;
 using DLCA;
 using Dumpify;
 using Newtonsoft.Json.Linq;
@@ -12,6 +15,7 @@ using System.Data;
 using System.Data.SQLite;
 using System.Data.SqlTypes;
 using System.Dynamic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection.Metadata;
@@ -21,7 +25,6 @@ using System.Security.Policy;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using System.Globalization;
 
 
 
@@ -572,6 +575,99 @@ namespace DLCA
 
 
 
+        // 批量更新退休信息//
+        public void UpdateAllRetirementInfo(ref string OutUpdateMessage)
+        {
+            if (Connection == null)
+            {
+                MSG.WriteLine("数据库连接为空，无法更新退休信息。");
+                return;
+            }
+            OutUpdateMessage = "";
+            int TemCount = 0;
+            int SkipCount = 0;
+
+            using (var tran = Connection.BeginTransaction())
+            {
+                try
+                {
+                    using (var cmd = new SQLiteCommand(
+                        "SELECT ShenFenZheng, XingBie, GanBuJiBie, JiShuZhiWuJiBie, ChuShengNianYue FROM kslist;",
+                        Connection, tran))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            string sfz = reader["ShenFenZheng"]?.ToString() ?? "";
+                            string xingbie = reader["XingBie"]?.ToString() ?? "";
+                            string ganbuJibie = reader["GanBuJiBie"]?.ToString() ?? "";
+                            string jishuZhiwuJibie = reader["JiShuZhiWuJiBie"]?.ToString() ?? "";
+                            string chushengNianYue = reader["ChuShengNianYue"]?.ToString() ?? "";
+
+                            // 性别调整规则（参考 Delphi 前端）
+                            if (xingbie == "女")
+                            {
+                                if (ganbuJibie == "正局级" || ganbuJibie == "副局级" ||
+                                    ganbuJibie == "市管一级调研员" || ganbuJibie == "正处级" ||
+                                    ganbuJibie == "副处级" || ganbuJibie == "一级调研员" ||
+                                    ganbuJibie == "二级调研员" || ganbuJibie == "三级调研员" ||
+                                    ganbuJibie == "四级调研员" || jishuZhiwuJibie == "教师序列正高级" ||
+                                    jishuZhiwuJibie == "教师序列副高级" || jishuZhiwuJibie == "非教师序列正高级" ||
+                                    jishuZhiwuJibie == "非教师序列副高级")
+                                {
+                                    xingbie = "男";
+                                }
+                            }
+
+                            try
+                            {
+                                // 调用已有的 CalculateRetirementDate
+                                DataProcedureHelper.CalculateRetirementDate(
+                                    xingbie, "干部", chushengNianYue,
+                                    out string tuiXiuRiQi, out int tuiXiuNianLing, out string tuiXiuNianYue);
+
+                                // 更新数据库
+                                using (var upd = new SQLiteCommand(@"
+                            UPDATE kslist
+                            SET GaiGeTuiXiuShiJian=@sj,
+                                GaiGeTuiXiuNianLing=@nl,
+                                GaiGeTuiXiuNianYue=@ny
+                            WHERE ShenFenZheng=@sfz;", Connection, tran))
+                                {
+                                    upd.Parameters.AddWithValue("@sj", tuiXiuRiQi ?? "");
+                                    upd.Parameters.AddWithValue("@nl", tuiXiuNianLing);
+                                    upd.Parameters.AddWithValue("@ny", tuiXiuNianYue ?? "");
+                                    upd.Parameters.AddWithValue("@sfz", sfz);
+                                    upd.ExecuteNonQuery();
+                                }
+
+                                TemCount++;
+                            }
+                            catch (Exception exOne)
+                            {
+                                SkipCount++;
+                                MSG.WriteLine($"身份证 {sfz} 的退休信息计算失败，已跳过。原因: {exOne.Message}");
+                                // 不抛出异常，继续下一条
+                            }
+                        }
+                    }
+
+                    tran.Commit();
+                    OutUpdateMessage = $@"所有人员退休信息已批量更新完成。成功更新 {TemCount} 条，跳过 {SkipCount} 条。";
+                    MSG.WriteLine(OutUpdateMessage);
+                }
+                catch (Exception ex)
+                {
+                    tran.Rollback();
+                    OutUpdateMessage = $"批量更新退休信息失败，已回滚事务。错误信息: {ex.Message}";
+                    MSG.WriteLine(OutUpdateMessage);
+                }
+            }
+        }
+
+
+
+
 
 
 
@@ -614,6 +710,181 @@ namespace DLCA
         }
 
 
+
+
+        //导出到docx或pdf文件//
+        public void ExportPersonToDocxWithPhoto(string sfz, string templatePath, string outputPath)
+        {
+            string ConvertDateToYearMonth(string inputDate)
+            {
+                try
+                {
+                    DateTime dt = DateTime.ParseExact(inputDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                    return dt.ToString("yyyy.MM");
+                }
+                catch
+                {
+                    return "";
+                }
+            }
+
+            if (Connection == null)
+            {
+                MSG.WriteLine("数据库连接为空，无法导出。");
+                return;
+            }
+
+            try
+            {
+                using (var cmd = new SQLiteCommand(
+                    "SELECT * FROM kslist WHERE ShenFenZheng=@sfz;", Connection))
+                {
+                    cmd.Parameters.AddWithValue("@sfz", sfz);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        if (!reader.Read())
+                        {
+                            MSG.WriteLine($"未找到身份证号 {sfz} 的记录。");
+                            return;
+                        }
+
+                        // 1. 加载模板
+                        Aspose.Words.Document doc = new Aspose.Words.Document(templatePath);
+                        DocumentBuilder builder = new DocumentBuilder(doc);
+
+                        // 2. 替换文本字段
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            string fieldName = reader.GetName(i);
+                            if (fieldName == "ZhaoPian") continue; // 照片单独处理  
+                            if (fieldName == "JianLi"){
+                                string fieldValue1 = reader["JianLi"]?.ToString() ?? "";
+                                string[] lines = fieldValue1.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+                                builder.MoveToBookmark("JianLiBookmark"); // 推荐用书签方式
+                                foreach (string line in lines)
+                                {
+                                    builder.Writeln(line); // 每行写入并换行
+                                }
+                                continue;
+                            }
+
+                            string fieldValue = reader[i]?.ToString() ?? "";
+                            //分别处理//
+                            if( (fieldName == "ChuShengNianYue") ||
+                                (fieldName == "RuDangShiJian")   ||
+                                (fieldName == "CanJiaGongZuoShiJian") ||
+                                (fieldName == "GaiGeTuiXiuShiJian")
+                            )
+                            {
+                                fieldValue = ConvertDateToYearMonth(fieldValue);
+                            }
+                            if (fieldName == "NianLing")
+                            {
+                                fieldValue = fieldValue + "岁";
+                            }
+                            doc.Range.Replace($"{{{fieldName}}}", fieldValue, new FindReplaceOptions());
+                        }
+
+                        // 3. 替换书签为照片
+                        if (!(reader["ZhaoPian"] is DBNull))
+                        {
+                            byte[] photoBytes = (byte[])reader["ZhaoPian"];
+                            if (photoBytes.Length > 0)
+                            {
+                                using (MemoryStream ms = new MemoryStream(photoBytes))
+                                {
+                                    Bookmark bm = doc.Range.Bookmarks["ZhaoPianBookmark"];
+                                    if (bm != null)
+                                    {
+                                        // 清空书签内容
+                                        bm.Text = "";
+
+                                        // 移动到书签位置
+                                        builder.MoveToBookmark("ZhaoPianBookmark", true, true);
+                                        builder.InsertImage(ms, 100, 120);
+                                    }
+                                    else
+                                    {
+                                        MSG.WriteLine("模板中未找到书签 'ZhaoPianBookmark'");
+                                    }
+                                }
+                            }
+                        }
+
+                        // 4. 查询家庭成员信息并填充书签
+                        using (var cmdFamily = new SQLiteCommand(
+                            "SELECT * FROM ksjiating WHERE ShenFenZheng=@sfz ORDER BY PaiXuId LIMIT 7;", Connection))
+                        {
+                            cmdFamily.Parameters.AddWithValue("@sfz", sfz);
+                            using (var readerFamily = cmdFamily.ExecuteReader())
+                            {
+                                int index = 1;
+                                while (index <= 7)
+                                {
+                                    string chengWei = "";
+                                    string xingMing = "";
+                                    string nianLing = "";
+                                    string zhengZhiMianMao = "";
+                                    string gongZuoDanWeiJiZhiWu = "";
+
+                                    if (readerFamily.Read())
+                                    {
+                                        chengWei = readerFamily["ChengWei"]?.ToString() ?? "";
+                                        xingMing = readerFamily["XingMing"]?.ToString() ?? "";
+                                        string chuShengRiQi = readerFamily["ChuShengRiQi"]?.ToString() ?? "";
+                                        if (DateTime.TryParse(chuShengRiQi, out DateTime birth))
+                                        {
+                                            int age = DateTime.Now.Year - birth.Year;
+                                            if (DateTime.Now < birth.AddYears(age)) age--;
+                                            nianLing = age.ToString() + "岁";
+                                        }
+                                        zhengZhiMianMao = readerFamily["ZhengZhiMianMao"]?.ToString() ?? "";
+                                        gongZuoDanWeiJiZhiWu = readerFamily["GongZuoDanWeiJiZhiWu"]?.ToString() ?? "";
+                                    }
+
+                                    // 写入书签（存在才写）
+                                    if (doc.Range.Bookmarks[$"ChengWei{index}"] != null)
+                                    {
+                                        builder.MoveToBookmark($"ChengWei{index}");
+                                        builder.Write(chengWei);
+                                    }
+                                    if (doc.Range.Bookmarks[$"XingMing{index}"] != null)
+                                    {
+                                        builder.MoveToBookmark($"XingMing{index}");
+                                        builder.Write(xingMing);
+                                    }
+                                    if (doc.Range.Bookmarks[$"NianLing{index}"] != null)
+                                    {
+                                        builder.MoveToBookmark($"NianLing{index}");
+                                        builder.Write(nianLing);
+                                    }
+                                    if (doc.Range.Bookmarks[$"ZhengZhiMianMao{index}"] != null)
+                                    {
+                                        builder.MoveToBookmark($"ZhengZhiMianMao{index}");
+                                        builder.Write(zhengZhiMianMao);
+                                    }
+                                    if (doc.Range.Bookmarks[$"GongZuoDanWeiJiZhiWu{index}"] != null)
+                                    {
+                                        builder.MoveToBookmark($"GongZuoDanWeiJiZhiWu{index}");
+                                        builder.Write(gongZuoDanWeiJiZhiWu);
+                                    }
+
+                                    index++;
+                                }
+                            }
+                        }
+
+                        // 5. 保存结果
+                        doc.Save(outputPath, SaveFormat.Docx);
+                        MSG.WriteLine($"人员 {sfz} 的信息已成功导出到 {outputPath}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MSG.WriteLine($"导出失败: {ex.Message}");
+            }
+        }
 
     } // end class DataModle
 
@@ -1065,6 +1336,9 @@ namespace DLCA
             retirementDateStr = finalRetirement.ToString("yyyy-MM-dd");
             retirementAge = age;
             retirementAgeMonthsStr = $"{years}岁{months}个月";
+            if(months<=0){
+                retirementAgeMonthsStr = $"{years}岁;
+            }
         }
 
         public static string NormalizeDateManual(string input)
@@ -1274,6 +1548,11 @@ namespace DLCA
             }
         }
     }
+
+
+    //================================================================================//
+
+
 
 
 }
