@@ -713,7 +713,7 @@ namespace DLCA
 
 
         //导出到docx或pdf文件//
-        public void ExportPersonToDocxWithPhoto(string sfz, string templatePath, string outputPath)
+        public void ExportPersonToDocxWithPhoto(string sfz, string templatePath, string outputFolder)
         {
             string ConvertDateToYearMonth(string inputDate)
             {
@@ -747,6 +747,15 @@ namespace DLCA
                             MSG.WriteLine($"未找到身份证号 {sfz} 的记录。");
                             return;
                         }
+                        string name = reader["XingMing"]?.ToString() ?? "";
+                        if (string.IsNullOrEmpty(name))
+                        {
+                            MSG.WriteLine($"身份证号 {sfz} 未找到姓名。");
+                            return;
+                        }
+                        // 生成输出文件名：证件号_姓名.docx
+                        string safeName = name.Replace(" ", "").Replace("/", "").Replace("\\", "");
+                        string outputPath = Path.Combine(outputFolder, $"{sfz}_{safeName}.docx");
 
                         // 1. 加载模板
                         Aspose.Words.Document doc = new Aspose.Words.Document(templatePath);
@@ -874,6 +883,11 @@ namespace DLCA
                             }
                         }
 
+                        // 在所有赋值操作完成后，统一删除文档中的书签
+                        foreach (Bookmark bm in doc.Range.Bookmarks)
+                        {
+                            bm.Remove();
+                        }
                         // 5. 保存结果
                         doc.Save(outputPath, SaveFormat.Docx);
                         MSG.WriteLine($"人员 {sfz} 的信息已成功导出到 {outputPath}");
