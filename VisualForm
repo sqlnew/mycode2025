@@ -306,6 +306,39 @@ namespace DLCA
             } //end localcmd_importxml
 
 
+            //批量导出DOCX文件//
+            else if (TemCmd == "localcmd_export_todoc")
+            {
+                string idListStr = TemQuery.data ?? "";
+                string outputFolder = TemQuery.other ?? "";
+
+                if (string.IsNullOrEmpty(idListStr))
+                {
+                    MSG.WriteLine("未提供身份证号列表。");
+                    return;
+                }
+                if (string.IsNullOrEmpty(outputFolder))
+                {
+                    MSG.WriteLine("未提供输出文件夹。");
+                    return;
+                }
+
+                string[] idList = idListStr.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (string sfz in idList)
+                {
+                    try
+                    {
+                        // 只传身份证号和目标文件夹，具体数据库查询在 DataModle 中完成
+                        Program.GlobalData.ExportPersonToDocxWithPhoto(sfz, "empty.docx", outputFolder);
+                    }
+                    catch (Exception ex)
+                    {
+                        MSG.WriteLine($"导出身份证号 {sfz} 时出错: {ex.Message}");
+                    }
+                }
+            }
+
 
         }
 
