@@ -1,9 +1,14 @@
 using Aspose.Words;
 using Aspose.Words.Drawing;
+using Aspose.Words.Layout;
 using Aspose.Words.Replacing;
+using Aspose.Words.Saving;
+using Aspose.Words.Tables;
 using DLCA;
 using Dumpify;
+using Microsoft.VisualBasic;
 using Newtonsoft.Json.Linq;
+using SkiaSharp;
 using SQLitePCL;
 using System;
 using System.Collections;
@@ -502,7 +507,7 @@ namespace DLCA
                 items[i].PaiXuId = i + 1;
             }
 
-            const int totalCount = 15; // 每人固定 15 条
+            const int totalCount = 17; // 每人固定 17 条
             using (var tran = Connection.BeginTransaction())
             {
                 try
@@ -617,6 +622,10 @@ namespace DLCA
                                 {
                                     xingbie = "男";
                                 }
+                                if ((ganbuJibie == "") || (jishuZhiwuJibie == ""))
+                                {
+                                    xingbie = "男";
+                                }
                             }
 
                             try
@@ -712,8 +721,9 @@ namespace DLCA
 
 
 
+
         //导出到docx或pdf文件//
-        public void ExportPersonToDocxWithPhoto(string sfz, string templatePath, string outputFolder)
+        public void ExportPersonToDocxWithPhoto(string sfz, string templatePath, string outputFolder, ref string OutMemBase64, bool IsSavetoMem = false, string FileFormat = "doc")
         {
             string ConvertDateToYearMonth(string inputDate)
             {
@@ -727,6 +737,71 @@ namespace DLCA
                     return "";
                 }
             }
+
+            int GetCellLineCount(Aspose.Words.Document doc, string bookmarkName)
+            {
+                try
+                {
+                    // 确认书签存在
+                    Bookmark bm = doc.Range.Bookmarks[bookmarkName];
+                    if (bm == null)
+                    {
+                        return 0;
+                    }
+                    // 获取书签所在段落
+                    Paragraph para = bm.BookmarkStart.ParentNode as Paragraph;
+                    if (para == null) {
+                        return 0; 
+                    }
+                    // 使用布局 API
+                    LayoutCollector collector = new LayoutCollector(doc);
+                    LayoutEnumerator enumerator = new LayoutEnumerator(doc);
+                    // 定位到该段落对应的布局实体
+                    enumerator.Current = collector.GetEntity(para);
+                    int lineCount = 0;
+                    // 遍历布局元素，统计行数
+                    do
+                    {
+                        if (enumerator.Type == LayoutEntityType.Line)
+                            lineCount++;
+                    }
+                    while (enumerator.MoveNext());
+
+                    return lineCount;
+                }
+                catch(Exception Ex)
+                {
+                    MSG.WriteLine(sfz + " 获取简历行数失败: " + Ex.Message);
+                    // 出错时返回 0
+                    return 0;
+                }
+            }
+
+
+            void SetBookmarkFontSize(Aspose.Words.Document doc, string bookmarkName, double fontSize)
+            {
+                try
+                {
+                    Bookmark bm = doc.Range.Bookmarks[bookmarkName];
+                    if (bm == null) return;
+
+                    // 找到书签所在的单元格
+                    Cell cell = bm.BookmarkStart.GetAncestor(typeof(Cell)) as Cell;
+                    if (cell == null) return;
+
+                    // 遍历单元格中的所有 Run 节点，统一设置字体大小
+                    foreach (Run run in cell.GetChildNodes(NodeType.Run, true))
+                    {
+                        run.Font.Size = fontSize;
+                    }
+                }
+                catch
+                {
+                    // 出错时直接返回，不抛异常
+                    return;
+                }
+            }
+
 
             if (Connection == null)
             {
@@ -754,11 +829,17 @@ namespace DLCA
                             return;
                         }
                         // 生成输出文件名：证件号_姓名.docx
+                        // 导出新文件名：单位序号-库中记录排序号-现任职务-姓名
+                        string TemDwNeixh = reader["DanWeiNeiXuhao"]?.ToString() ?? "";
+                        string TemDwPaiXuid = reader["DanWeiPaiXuId"]?.ToString() ?? "";
+                        string TemXianRenZhiWu = reader["XianRenZhiWu"]?.ToString() ?? "";
                         string safeName = name.Replace(" ", "").Replace("/", "").Replace("\\", "");
-                        string outputPath = Path.Combine(outputFolder, $"{sfz}_{safeName}.docx");
+                        string outputPath = Path.Combine(outputFolder, $"{TemDwPaiXuid}-{TemDwNeixh}-{TemXianRenZhiWu}-{safeName}.docx");
 
                         // 1. 加载模板
-                        Aspose.Words.Document doc = new Aspose.Words.Document(templatePath);
+                        //Aspose.Words.Document doc = new Aspose.Words.Document(templatePath);
+                        GlobalUnit.Global_EmptyDocStream.Seek(0, SeekOrigin.Begin);
+                        Aspose.Words.Document doc = new Aspose.Words.Document(GlobalUnit.Global_EmptyDocStream);
                         DocumentBuilder builder = new DocumentBuilder(doc);
 
                         // 2. 替换文本字段
@@ -773,6 +854,10 @@ namespace DLCA
                                 foreach (string line in lines)
                                 {
                                     builder.Writeln(line); // 每行写入并换行
+                                }
+                                if(lines.Length > 12)
+                                {
+                                    SetBookmarkFontSize(doc, "JianLiBookmark", 11);
                                 }
                                 continue;
                             }
@@ -845,7 +930,7 @@ namespace DLCA
                                         {
                                             int age = DateTime.Now.Year - birth.Year;
                                             if (DateTime.Now < birth.AddYears(age)) age--;
-                                            nianLing = age.ToString() + "岁";
+                                            nianLing = age.ToString() + "";
                                         }
                                         zhengZhiMianMao = readerFamily["ZhengZhiMianMao"]?.ToString() ?? "";
                                         gongZuoDanWeiJiZhiWu = readerFamily["GongZuoDanWeiJiZhiWu"]?.ToString() ?? "";
@@ -889,7 +974,58 @@ namespace DLCA
                             bm.Remove();
                         }
                         // 5. 保存结果
-                        doc.Save(outputPath, SaveFormat.Docx);
+                        if(IsSavetoMem == false){
+                            doc.Save(outputPath, SaveFormat.Docx);
+                            doc = null;
+                            builder = null;
+                        }
+                        else{
+                            using (MemoryStream ms = new MemoryStream())
+                            {
+                                ms.SetLength(0);
+                                // 保存到内存流
+                                if (FileFormat == "doc"){
+                                    doc.Save(ms, SaveFormat.Docx);
+                                } else if (FileFormat == "pdf")
+                                {
+                                    doc.UpdatePageLayout();
+                                    PdfSaveOptions saveOptions = new PdfSaveOptions { Compliance = PdfCompliance.Pdf17 };
+                                    doc.Save(ms, saveOptions);
+                                }
+                                else if (FileFormat == "html")
+                                {
+                                    doc.Save(ms, SaveFormat.Html);
+                                }
+                                else if (FileFormat == "png")
+                                {
+                                    //doc.Save(ms, SaveFormat.Png);
+                                    byte[] imageBytes = ConvertImageClass.ConvertDocxToSingleImage(doc, true);
+                                    ms.SetLength(0);
+                                    ms.Write(imageBytes, 0, imageBytes.Length);
+                                    ms.Position = 0;
+                                }
+                                else if (FileFormat == "jpg")
+                                {
+                                    //doc.Save(ms, SaveFormat.Jpeg);
+                                    byte[] imageBytes = ConvertImageClass.ConvertDocxToSingleImage(doc, false);
+                                    ms.SetLength(0);
+                                    ms.Write(imageBytes, 0, imageBytes.Length);
+                                    ms.Position = 0;
+                                }
+                                else
+                                {
+                                    doc.Save(ms, SaveFormat.Docx);
+                                }
+                                // 转换成字节数组
+                                byte[] bytes = ms.ToArray();
+                                //System.IO.File.WriteAllBytes("testfile." + FileFormat, bytes);
+                                // 转换成 Base64 字符串
+                                OutMemBase64 = Convert.ToBase64String(bytes);
+                            }
+                            doc = null;
+                            builder = null;
+                        }
+                        
                         MSG.WriteLine($"人员 {sfz} 的信息已成功导出到 {outputPath}");
                     }
                 }
@@ -1014,59 +1150,96 @@ namespace DLCA
         public string Content { get; set; } = "";
     }
 
+
     public static class NewJianLiParser
     {
         private static readonly Regex[] DatePatterns = new[]
         {
         new Regex(@"\b(?<y>\d{4})[ \-./](?<m>\d{1,2})[ \-./](?<d>\d{1,2})\b", RegexOptions.Compiled),
-        new Regex(@"\b(?<y>\d{4})[ \-./](?<m>\d{1,2})\b", RegexOptions.Compiled),
-        new Regex(@"\b(?<y2>\d{2})[.](?<m>\d{1,2})[.](?<d>\d{1,2})\b", RegexOptions.Compiled),
         new Regex(@"\b(?<y>\d{4})年\s*(?<m>\d{1,2})月(?:\s*(?<d>\d{1,2})日?)?\b", RegexOptions.Compiled),
+        new Regex(@"\b(?<y2>\d{2})年\s*(?<m>\d{1,2})月(?:\s*(?<d>\d{1,2})日?)?\b", RegexOptions.Compiled),
         new Regex(@"\b(?<y>\d{4})[.\/\-](?<m>\d{1,2})\b", RegexOptions.Compiled),
+        new Regex(@"\b(?<y2>\d{2})[.\/](?<m>\d{1,2})[.\/](?<d>\d{1,2})\b", RegexOptions.Compiled),
         new Regex(@"\b(?<m>\d{1,2})[.\/\-](?<d>\d{1,2})\b", RegexOptions.Compiled)
     };
 
-        private static readonly Regex SepRegex = new Regex(@"(--+|—+|至|到|~|(?<!\d)-(?!\d))", RegexOptions.Compiled);
+        private static readonly Regex SepRegex = new Regex(
+            @"(?<sep>--+|—+|至今|在职|至|到现在|到|~|(?<!\d)-(?!\d))",
+            RegexOptions.Compiled);
 
-        // TryParseLine: 增强后支持只有 start、start+sep(无end)、以及 start+content（无sep无end）
-        private static bool TryParseLine(string line, out string start, out string end, out string content)
+        private static readonly Regex CueWordsRegex = new Regex(@"(其间|期间|期间：|其间：|兼职|主持|任职|负责|期间内)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        private static bool TryParseLine(string line, out string start, out string end, out string content, out string rawStart, out string rawEnd, out string rawContent)
         {
-            start = end = content = "";
+            start = end = content = rawStart = rawEnd = rawContent = "";
 
-            // 1) 找第一个日期 token（最左）
             var first = FindFirstDate(line);
             if (first == null) return false;
             start = first.Value.Text;
+            rawStart = start;
             int posAfterStart = first.Value.Index + first.Value.Length;
 
-            // 2) 优先寻找显式分隔符（限制距离，避免误判）
+            // 查找分隔符（若存在）
             var sepMatch = SepRegex.Match(line, posAfterStart);
-            if (sepMatch.Success && sepMatch.Index - posAfterStart <= 40)
+            if (sepMatch.Success && sepMatch.Index - posAfterStart <= 60)
             {
                 int posAfterSep = sepMatch.Index + sepMatch.Length;
-                // 在分隔符之后寻找第二个日期
-                var second = FindFirstDate(line, posAfterSep);
-                if (second != null)
+                string sepTextLower = sepMatch.Groups["sep"].Value.Trim();
+
+                if (Regex.IsMatch(sepTextLower, @"(至今|在职|到现在)"))
                 {
-                    // 正常 start -- end ... 的情况
+                    end = "";
+                    rawEnd = "";
+                    content = line.Substring(posAfterSep).Trim();
+                    rawContent = content;
+                    return true;
+                }
+
+                // 在分隔符之后寻找第二个日期，跳过括号内或被判为内容前缀的候选
+                var second = FindFirstDate(line, posAfterSep);
+                while (second != null)
+                {
+                    if (IsIndexInsideBrackets(line, second.Value.Index))
+                    {
+                        second = FindFirstDate(line, second.Value.Index + second.Value.Length);
+                        continue;
+                    }
+
+                    int betweenStart = posAfterStart;
+                    int betweenLen = second.Value.Index - betweenStart;
+                    string between = betweenLen > 0 ? line.Substring(betweenStart, betweenLen) : "";
+
+                    bool hasChinesePrefix = Regex.IsMatch(between, @"[\u4e00-\u9fff]{2,}");
+                    bool hasCueWords = CueWordsRegex.IsMatch(between);
+
+                    if (hasChinesePrefix || hasCueWords)
+                    {
+                        // 关键修正：content 从分隔符之后开始截取，避免把分隔符残留到 content 开头
+                        end = "";
+                        rawEnd = "";
+                        content = line.Substring(posAfterSep).Trim();
+                        rawContent = content;
+                        return true;
+                    }
+
+                    // 正常把 second 当作结束日期
                     end = second.Value.Text;
+                    rawEnd = end;
                     int posAfterEnd = second.Value.Index + second.Value.Length;
                     content = line.Substring(posAfterEnd).Trim();
-                    if (string.IsNullOrEmpty(content)) content = "";
+                    rawContent = content;
                     return true;
                 }
-                else
-                {
-                    // 分隔符存在但没有第二个日期：允许视为“至今”情况
-                    // 内容为分隔符之后的剩余文本（可能为空）
-                    content = line.Substring(posAfterSep).Trim();
-                    // 即便 content 为空，也允许（表示 start 到现在且无描述）
-                    end = "";
-                    return true;
-                }
+
+                // 分隔符存在但没有合适的第二个日期
+                end = "";
+                rawEnd = "";
+                content = line.Substring(posAfterSep).Trim();
+                rawContent = content;
+                return true;
             }
 
-            // 3) 没有显式分隔符，尝试空格分隔的两个日期（两个日期之间仅有空白或少量连字符）
+            // 没有显式分隔符，尝试在 start 之后直接找第二个日期（允许少量空白或短连字符）
             var secondAlt = FindFirstDate(line, posAfterStart);
             if (secondAlt != null)
             {
@@ -1074,30 +1247,43 @@ namespace DLCA
                 if (betweenLen >= 0 && betweenLen <= 12)
                 {
                     string between = line.Substring(posAfterStart, betweenLen);
-                    if (Regex.IsMatch(between, @"^[\s\-–—]{1,12}$"))
+                    if (Regex.IsMatch(between, @"^[\s\-–—]{0,12}$"))
                     {
-                        end = secondAlt.Value.Text;
-                        int posAfterEnd = secondAlt.Value.Index + secondAlt.Value.Length;
-                        content = line.Substring(posAfterEnd).Trim();
-                        if (string.IsNullOrEmpty(content)) content = "";
-                        return true;
+                        if (!IsIndexInsideBrackets(line, secondAlt.Value.Index))
+                        {
+                            bool hasChinesePrefix = Regex.IsMatch(between, @"[\u4e00-\u9fff]{2,}");
+                            bool hasCueWords = CueWordsRegex.IsMatch(between);
+                            if (hasChinesePrefix || hasCueWords)
+                            {
+                                end = "";
+                                rawEnd = "";
+                                content = line.Substring(posAfterStart).Trim();
+                                rawContent = content;
+                                return true;
+                            }
+
+                            end = secondAlt.Value.Text;
+                            rawEnd = end;
+                            int posAfterEnd = secondAlt.Value.Index + secondAlt.Value.Length;
+                            content = line.Substring(posAfterEnd).Trim();
+                            rawContent = content;
+                            return true;
+                        }
                     }
                 }
             }
 
-            // 4) 没有第二个日期，也没有显式分隔符：如果第一个日期后直接是内容（允许若干空白），则视为只有开始日期
-            //    例如: "2009.11    华师大公共管理研究院..."
+            // 第一个日期后直接是内容
             var restAfterStart = line.Substring(posAfterStart).Trim();
             if (!string.IsNullOrEmpty(restAfterStart))
             {
-                // 但要避免把非常短的尾部误判为内容（可根据需要调整阈值）
-                // 这里认为只要第一个日期后有非空文本，就把它当作 content（且 end 为空）
                 end = "";
+                rawEnd = "";
                 content = restAfterStart;
+                rawContent = content;
                 return true;
             }
 
-            // 5) 兜底失败
             return false;
         }
 
@@ -1113,15 +1299,39 @@ namespace DLCA
                 var line = raw.Trim();
                 if (string.IsNullOrEmpty(line)) continue;
 
-                if (TryParseLine(line, out string sRaw, out string eRaw, out string cont))
+                if (TryParseLine(line, out string sRaw, out string eRaw, out string cont, out string rawS, out string rawE, out string rawC))
                 {
-                    list.Add(new JianLiItem
+                    var item = new JianLiItem
                     {
                         PaiXuId = idx++,
                         StartDate = NormalizeDate(sRaw),
                         EndDate = string.IsNullOrWhiteSpace(eRaw) ? "" : NormalizeDate(eRaw),
                         Content = cont.Trim()
-                    });
+                    };
+
+                    // 后处理：一致性检查时，优先从分隔符之后截取剩余文本（若存在分隔符）
+                    var firstMatch = FindFirstDate(line);
+                    if (firstMatch != null && !string.IsNullOrEmpty(item.EndDate))
+                    {
+                        int posAfterStart = firstMatch.Value.Index + firstMatch.Value.Length;
+                        int restStart = posAfterStart;
+
+                        var sepMatch = SepRegex.Match(line, posAfterStart);
+                        if (sepMatch.Success && sepMatch.Index - posAfterStart <= 60)
+                        {
+                            restStart = sepMatch.Index + sepMatch.Length;
+                        }
+
+                        string rest = line.Substring(restStart).Trim();
+                        if (Regex.IsMatch(rest, @"^[\u4e00-\u9fff]{2,}"))
+                        {
+                            // 把 EndDate 视为内容一部分
+                            item.EndDate = "";
+                            item.Content = rest;
+                        }
+                    }
+
+                    list.Add(item);
                 }
                 else
                 {
@@ -1162,16 +1372,25 @@ namespace DLCA
             return (bestText, bestIndex, bestLen);
         }
 
-        // NormalizeDate 与 MapTwoDigitYear、SafeFormat 保持之前实现（略）
         private static string NormalizeDate(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw)) return "";
 
             raw = raw.Trim();
+
             var m = Regex.Match(raw, @"^(?<y>\d{4})年\s*(?<m>\d{1,2})月(?:\s*(?<d>\d{1,2})日?)?$");
             if (m.Success)
             {
                 int y = int.Parse(m.Groups["y"].Value);
+                int mm = int.Parse(m.Groups["m"].Value);
+                int dd = m.Groups["d"].Success ? int.Parse(m.Groups["d"].Value) : 1;
+                return SafeFormat(y, mm, dd);
+            }
+
+            m = Regex.Match(raw, @"^(?<y2>\d{2})年\s*(?<m>\d{1,2})月(?:\s*(?<d>\d{1,2})日?)?$");
+            if (m.Success)
+            {
+                int y = MapTwoDigitYear(int.Parse(m.Groups["y2"].Value));
                 int mm = int.Parse(m.Groups["m"].Value);
                 int dd = m.Groups["d"].Success ? int.Parse(m.Groups["d"].Value) : 1;
                 return SafeFormat(y, mm, dd);
@@ -1186,11 +1405,10 @@ namespace DLCA
                 return SafeFormat(y, mm, dd);
             }
 
-            m = Regex.Match(raw, @"^(?<y2>\d{2})[.](?<m>\d{1,2})[.](?<d>\d{1,2})$");
+            m = Regex.Match(raw, @"^(?<y2>\d{2})[.\/](?<m>\d{1,2})[.\/](?<d>\d{1,2})$");
             if (m.Success)
             {
-                int y2 = int.Parse(m.Groups["y2"].Value);
-                int y = MapTwoDigitYear(y2);
+                int y = MapTwoDigitYear(int.Parse(m.Groups["y2"].Value));
                 int mm = int.Parse(m.Groups["m"].Value);
                 int dd = int.Parse(m.Groups["d"].Value);
                 return SafeFormat(y, mm, dd);
@@ -1204,7 +1422,18 @@ namespace DLCA
                 return SafeFormat(y, mm, 1);
             }
 
-            if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            if (Regex.IsMatch(raw, @"^\d{4}$"))
+            {
+                int y = int.Parse(raw);
+                return SafeFormat(y, 1, 1);
+            }
+            if (Regex.IsMatch(raw, @"^\d{2}$"))
+            {
+                int y = MapTwoDigitYear(int.Parse(raw));
+                return SafeFormat(y, 1, 1);
+            }
+
+            if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var dt))
             {
                 return dt.ToString("yyyy-MM-dd");
             }
@@ -1222,9 +1451,10 @@ namespace DLCA
         {
             try
             {
-                int daysInMonth = DateTime.DaysInMonth(y, Math.Max(1, Math.Min(12, m)));
-                int dd = Math.Max(1, Math.Min(daysInMonth, d));
-                var dt = new DateTime(y, Math.Max(1, Math.Min(12, m)), dd);
+                m = Math.Max(1, Math.Min(12, m));
+                int daysInMonth = DateTime.DaysInMonth(y, m);
+                d = Math.Max(1, Math.Min(daysInMonth, d));
+                var dt = new DateTime(y, m, d);
                 return dt.ToString("yyyy-MM-dd");
             }
             catch
@@ -1232,9 +1462,49 @@ namespace DLCA
                 return $"{y:0000}-{m:00}-{d:00}";
             }
         }
+
+        private static bool IsIndexInsideBrackets(string text, int index)
+        {
+            if (index < 0 || index > text.Length) return false;
+
+            var opens = new[] { '(', '[', '{', '（', '【', '「', '『', '《' };
+            var closes = new[] { ')', ']', '}', '）', '】', '」', '』', '》' };
+
+            int lastOpenPos = -1;
+            char lastOpenChar = '\0';
+            for (int i = index - 1; i >= 0; i--)
+            {
+                char c = text[i];
+                int oi = Array.IndexOf(opens, c);
+                int ci = Array.IndexOf(closes, c);
+                if (ci >= 0)
+                {
+                    break;
+                }
+                if (oi >= 0)
+                {
+                    lastOpenPos = i;
+                    lastOpenChar = c;
+                    break;
+                }
+            }
+            if (lastOpenPos == -1) return false;
+
+            int openIndex = Array.IndexOf(opens, lastOpenChar);
+            if (openIndex < 0) return false;
+            char expectedClose = closes[openIndex];
+
+            for (int j = lastOpenPos + 1; j < text.Length; j++)
+            {
+                if (text[j] == expectedClose)
+                {
+                    return j >= index;
+                }
+            }
+
+            return true;
+        }
     }
-
-
 
 
 
@@ -1394,6 +1664,65 @@ namespace DLCA
 
 
     //================================================================================// 
+
+
+
+    public static class ConvertImageClass
+    {
+        public static byte[] ConvertDocxToSingleImage(Aspose.Words.Document indoc, bool usePng = true)
+        {
+            Aspose.Words.Document doc = indoc;
+            Aspose.Words.Saving.ImageSaveOptions options = new Aspose.Words.Saving.ImageSaveOptions(usePng ? Aspose.Words.SaveFormat.Png : Aspose.Words.SaveFormat.Jpeg);
+
+            List<Bitmap> bitmaps = new List<Bitmap>();
+
+            // 逐页生成图片到内存
+            for (int i = 0; i < doc.PageCount; i++)
+            {
+                options.PageSet = new PageSet(i);
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    doc.Save(ms, options);
+                    ms.Position = 0;
+                    bitmaps.Add(new Bitmap(ms));
+                }
+            }
+
+            // 计算总宽度和高度（纵向拼接）
+            int totalWidth = 0;
+            int totalHeight = 0;
+            foreach (var bmp in bitmaps)
+            {
+                totalWidth = Math.Max(totalWidth, bmp.Width);
+                totalHeight += bmp.Height;
+            }
+
+            // 合成大图
+            using (Bitmap finalImage = new Bitmap(totalWidth, totalHeight))
+            using (Graphics g = Graphics.FromImage(finalImage))
+            {
+                g.Clear(System.Drawing.Color.White);
+                int offsetY = 0;
+                foreach (var bmp in bitmaps)
+                {
+                    g.DrawImage(bmp, new System.Drawing.Rectangle(0, offsetY, bmp.Width, bmp.Height));
+                    offsetY += bmp.Height;
+                }
+
+                using (MemoryStream outputStream = new MemoryStream())
+                {
+                    ImageFormat format = usePng ? ImageFormat.Png : ImageFormat.Jpeg;
+                    finalImage.Save(outputStream, format);
+                    return outputStream.ToArray(); // 返回字节数组
+                }
+            }
+        }
+
+    }
+
+
+    //================================================================================// 
+
 
 
     public interface IDbHelpers
